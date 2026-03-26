@@ -37,6 +37,15 @@ public class CursorHighlightService : IDisposable
     public void SetMagnificationService(MagnificationService service)
     {
         _magnificationService = service;
+        // When magnifier creates its window, bring ring back to front
+        _magnificationService.MagnifierWindowCreated += BringToFront;
+    }
+
+    private void BringToFront()
+    {
+        if (_overlayWindow == null) return;
+        _overlayWindow.Topmost = false;
+        _overlayWindow.Topmost = true;
     }
 
     public void Toggle()

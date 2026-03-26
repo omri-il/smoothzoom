@@ -17,6 +17,9 @@ public class MagnificationService : IDisposable
     private User32.RECT _lastSourceRect;
     private readonly List<IntPtr> _excludeWindows = new();
 
+    // Event to notify overlays to re-assert Z-order
+    public event Action? MagnifierWindowCreated;
+
     public void ExcludeWindow(IntPtr hwnd)
     {
         if (!_excludeWindows.Contains(hwnd))
@@ -48,15 +51,13 @@ public class MagnificationService : IDisposable
             return;
         }
 
-        // Create windows if they don't exist or monitor changed
         if (!_windowsCreated || !BoundsEqual(_currentMonitorBounds, monitorBounds))
         {
             DestroyMagnifierWindows();
             CreateMagnifierWindows(monitorBounds);
-            if (!_windowsCreated) return; // Creation failed
+            if (!_windowsCreated) return;
         }
 
-        // Update transform only when scale changes
         if (Math.Abs(scale - _lastScale) > 0.001f)
         {
             var transform = MagnificationApi.MAGTRANSFORM.CreateScale(scale);
@@ -64,7 +65,6 @@ public class MagnificationService : IDisposable
             _lastScale = scale;
         }
 
-        // Calculate source rectangle
         int monW = monitorBounds.Right - monitorBounds.Left;
         int monH = monitorBounds.Bottom - monitorBounds.Top;
         float viewW = monW / scale;
@@ -89,7 +89,7 @@ public class MagnificationService : IDisposable
 
         MagnificationApi.MagSetWindowSource(_magnifierHwnd, sourceRect);
 
-        // Only invalidate when source rect actually changed (reduces flicker)
+        // Only invalidate when source rect actually changed
         if (!RectEqual(sourceRect, _lastSourceRect))
         {
             User32.InvalidateRect(_magnifierHwnd, IntPtr.Zero, false);
@@ -138,12 +138,14 @@ public class MagnificationService : IDisposable
             return;
         }
 
-        // Exclude host + overlays from magnification
         UpdateFilterList();
 
         _lastScale = 0;
         _lastSourceRect = default;
         _windowsCreated = true;
+
+        // Notify overlays (ring, help) to re-assert Z-order above us
+        MagnifierWindowCreated?.Invoke();
     }
 
     private void DestroyMagnifierWindows()
@@ -155,7 +157,7 @@ public class MagnificationService : IDisposable
         }
         if (_hostForm != null)
         {
-            _hostForm.Hide(); // Hide first to avoid visible close flash
+            _hostForm.Hide();
             _hostForm.Close();
             _hostForm.Dispose();
             _hostForm = null;
@@ -169,14 +171,12 @@ public class MagnificationService : IDisposable
     {
         if (_magnifierHwnd == IntPtr.Zero || _hostForm == null) return;
 
-        // Build list: host form + valid exclude windows
         var handles = new List<IntPtr> { _hostForm.Handle };
         foreach (var hwnd in _excludeWindows)
         {
             if (User32.IsWindow(hwnd))
                 handles.Add(hwnd);
         }
-        // Clean up stale handles
         _excludeWindows.RemoveAll(h => !User32.IsWindow(h));
 
         IntPtr filterList = Marshal.AllocHGlobal(IntPtr.Size * handles.Count);
@@ -217,6 +217,7 @@ public class MagnificationService : IDisposable
 internal class MagnifierHostForm : WinForms.Form
 {
     private const int WM_NCHITTEST = 0x0084;
+    private const int WM_ERASEBKGND = 0x0014;
     private const int HTTRANSPARENT = -1;
 
     protected override void WndProc(ref WinForms.Message m)
@@ -224,6 +225,12 @@ internal class MagnifierHostForm : WinForms.Form
         if (m.Msg == WM_NCHITTEST)
         {
             m.Result = (IntPtr)HTTRANSPARENT;
+            return;
+        }
+        // Prevent background erasing (reduces flicker)
+        if (m.Msg == WM_ERASEBKGND)
+        {
+            m.Result = (IntPtr)1;
             return;
         }
         base.WndProc(ref m);
@@ -234,6 +241,8 @@ internal class MagnifierHostForm : WinForms.Form
         get
         {
             var cp = base.CreateParams;
+            // WS_CLIPCHILDREN prevents parent from painting over magnifier child
+            cp.Style |= (int)User32.WS_CLIPCHILDREN;
             cp.ExStyle |= (int)(User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT
                               | User32.WS_EX_TOOLWINDOW | User32.WS_EX_NOACTIVATE);
             return cp;
