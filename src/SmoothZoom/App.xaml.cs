@@ -17,6 +17,7 @@ public partial class App : System.Windows.Application
     private MagnificationService? _magnification;
     private ZoomController? _zoomController;
     private CursorHighlightService? _cursorHighlight;
+    private MonitorFreezeService? _monitorFreeze;
     private HelpOverlay? _helpOverlay;
     private AppSettings _settings = new();
 
@@ -47,6 +48,7 @@ public partial class App : System.Windows.Application
                 "SmoothZoom", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
+        _monitorFreeze = new MonitorFreezeService();
         _zoomController = new ZoomController(_magnification, OnZoomStateChanged);
         _cursorHighlight = new CursorHighlightService();
         _cursorHighlight.SetMagnificationService(_magnification);
@@ -91,9 +93,15 @@ public partial class App : System.Windows.Application
         };
     }
 
-    private void OnZoomStateChanged(bool isZoomed)
+    private void OnZoomStateChanged(bool isZoomed, User32.RECT activeMonitorBounds)
     {
         UpdateTrayIcon(isZoomed);
+
+        // Freeze other monitors when zooming, unfreeze when done
+        if (isZoomed)
+            _monitorFreeze?.FreezeOtherMonitors(activeMonitorBounds);
+        else
+            _monitorFreeze?.UnfreezeAll();
     }
 
     private void SetupTrayIcon()
@@ -192,6 +200,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _monitorFreeze?.Dispose();
         _cursorHighlight?.Dispose();
         _zoomController?.Dispose();
         _magnification?.Dispose();

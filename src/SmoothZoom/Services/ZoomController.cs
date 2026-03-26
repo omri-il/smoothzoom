@@ -7,7 +7,7 @@ public class ZoomController : IDisposable
 {
     private readonly MagnificationService _magnification;
     private readonly DispatcherTimer _timer;
-    private readonly Action<bool> _onZoomStateChanged;
+    private readonly Action<bool, User32.RECT> _onZoomStateChanged;
 
     // State machine
     private enum ZoomState { Idle, Animating, Zoomed }
@@ -42,7 +42,7 @@ public class ZoomController : IDisposable
 
     public bool IsZoomed => _state != ZoomState.Idle;
 
-    public ZoomController(MagnificationService magnification, Action<bool> onZoomStateChanged)
+    public ZoomController(MagnificationService magnification, Action<bool, User32.RECT> onZoomStateChanged)
     {
         _magnification = magnification;
         _onZoomStateChanged = onZoomStateChanged;
@@ -96,7 +96,7 @@ public class ZoomController : IDisposable
         _animationDuration = TimeSpan.FromMilliseconds(ScrollAnimationMs);
         _state = ZoomState.Animating;
         _timer.Start();
-        _onZoomStateChanged(true);
+        _onZoomStateChanged(true, _activeMonitorBounds);
     }
 
     public void ToggleViewLock()
@@ -112,9 +112,10 @@ public class ZoomController : IDisposable
     public void DragPan(int deltaX, int deltaY)
     {
         if (_state == ZoomState.Idle) return;
-        // Move viewport WITH the cursor so content sticks to the grab point
-        _smoothX += deltaX;
-        _smoothY += deltaY;
+        // "Grab and drag" feel — content follows the drag direction
+        // like pulling a piece of paper on a desk
+        _smoothX -= deltaX;
+        _smoothY -= deltaY;
     }
 
     public void PanicReset()
@@ -126,7 +127,7 @@ public class ZoomController : IDisposable
         _monitorCaptured = false;
         _timer.Stop();
         _magnification.Reset();
-        _onZoomStateChanged(false);
+        _onZoomStateChanged(false, _activeMonitorBounds);
     }
 
     private void AnimateTo(float target, int durationMs)
@@ -148,7 +149,7 @@ public class ZoomController : IDisposable
         _viewLocked = true; // Default: locked view
 
         _timer.Start();
-        _onZoomStateChanged(target > 1.0f);
+        _onZoomStateChanged(target > 1.0f, _activeMonitorBounds);
     }
 
     private void OnTimerTick(object? sender, EventArgs e)
