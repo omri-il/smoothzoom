@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Windows;
+using SmoothZoom.Services;
 using WinForms = System.Windows.Forms;
 using Drawing = System.Drawing;
 
@@ -9,6 +10,7 @@ public partial class App : System.Windows.Application
 {
     private Mutex? _mutex;
     private WinForms.NotifyIcon? _trayIcon;
+    private KeyboardHookService? _keyboardHook;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -25,6 +27,7 @@ public partial class App : System.Windows.Application
         }
 
         SetupTrayIcon();
+        SetupKeyboardHook();
     }
 
     private void SetupTrayIcon()
@@ -98,6 +101,24 @@ public partial class App : System.Windows.Application
         _trayIcon.Text = isZoomed ? "SmoothZoom (Zoomed)" : "SmoothZoom";
     }
 
+    private void SetupKeyboardHook()
+    {
+        _keyboardHook = new KeyboardHookService();
+        _keyboardHook.ToggleZoomPressed += () =>
+        {
+            // Will be wired to ZoomController in Phase 3
+            System.Diagnostics.Debug.WriteLine("SmoothZoom: Toggle zoom pressed (Ctrl+Alt+Z)");
+        };
+        _keyboardHook.PanicResetPressed += () =>
+        {
+            System.Diagnostics.Debug.WriteLine("SmoothZoom: Panic reset pressed (Ctrl+Alt+Esc)");
+        };
+        _keyboardHook.ViewLockPressed += () =>
+        {
+            System.Diagnostics.Debug.WriteLine("SmoothZoom: View lock pressed (Ctrl+Alt+L)");
+        };
+    }
+
     private void OnSettingsClicked(object? sender, EventArgs e)
     {
         // Will be implemented in Phase 5
@@ -118,6 +139,7 @@ public partial class App : System.Windows.Application
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
         }
+        _keyboardHook?.Dispose();
         _mutex?.Dispose();
         base.OnExit(e);
     }
