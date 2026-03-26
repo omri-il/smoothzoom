@@ -34,9 +34,9 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
-                    <TextBlock Text="Ctrl + Alt + Scroll" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
+                    <TextBlock Text="Ctrl + Alt + Z" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
                 </Border>
-                <TextBlock Grid.Column="1" Text="Zoom in/out (scroll up = in, down = out)" Foreground="#CDD6F4" FontSize="13"
+                <TextBlock Grid.Column="1" Text="Toggle zoom in/out" Foreground="#CDD6F4" FontSize="13"
                            VerticalAlignment="Center" Margin="12,0,0,0"/>
             </Grid>
 
@@ -46,9 +46,21 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
-                    <TextBlock Text="Ctrl + Alt + Z" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
+                    <TextBlock Text="Ctrl + Alt + Plus" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
                 </Border>
-                <TextBlock Grid.Column="1" Text="Quick toggle zoom (preset level)" Foreground="#CDD6F4" FontSize="13"
+                <TextBlock Grid.Column="1" Text="Zoom in more (+0.25x)" Foreground="#CDD6F4" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
+                    <TextBlock Text="Ctrl + Alt + Minus" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="Zoom out (-0.25x)" Foreground="#CDD6F4" FontSize="13"
                            VerticalAlignment="Center" Margin="12,0,0,0"/>
             </Grid>
 

@@ -17,7 +17,6 @@ public partial class App : System.Windows.Application
     private MagnificationService? _magnification;
     private ZoomController? _zoomController;
     private CursorHighlightService? _cursorHighlight;
-    private MonitorFreezeService? _monitorFreeze;
     private HelpOverlay? _helpOverlay;
     private AppSettings _settings = new();
 
@@ -48,7 +47,6 @@ public partial class App : System.Windows.Application
                 "SmoothZoom", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
-        _monitorFreeze = new MonitorFreezeService();
         _zoomController = new ZoomController(_magnification, OnZoomStateChanged);
         _cursorHighlight = new CursorHighlightService();
         _cursorHighlight.SetMagnificationService(_magnification);
@@ -93,22 +91,9 @@ public partial class App : System.Windows.Application
         };
     }
 
-    private bool _wasZoomed;
-
     private void OnZoomStateChanged(bool isZoomed, User32.RECT activeMonitorBounds)
     {
         UpdateTrayIcon(isZoomed);
-
-        if (isZoomed && !_wasZoomed)
-        {
-            // Freeze other monitors BEFORE first zoom frame
-            _monitorFreeze?.FreezeOtherMonitors(activeMonitorBounds);
-        }
-        else if (!isZoomed && _wasZoomed)
-        {
-            _monitorFreeze?.UnfreezeAll();
-        }
-        _wasZoomed = isZoomed;
     }
 
     private void SetupTrayIcon()
@@ -166,7 +151,8 @@ public partial class App : System.Windows.Application
         _keyboardHook.ToggleZoomPressed += () => _zoomController?.Toggle();
         _keyboardHook.PanicResetPressed += () => _zoomController?.PanicReset();
         _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
-        _keyboardHook.ScrollWheel += (direction) => _zoomController?.ScrollZoom(direction);
+        _keyboardHook.ZoomInStepPressed += () => _zoomController?.ZoomInStep();
+        _keyboardHook.ZoomOutStepPressed += () => _zoomController?.ZoomOutStep();
         _keyboardHook.MiddleButtonChanged += (pressed) => _zoomController?.SetMiddleDragging(pressed);
         _keyboardHook.HighlightTogglePressed += () => _cursorHighlight?.Toggle();
         _keyboardHook.HelpTogglePressed += OnHelpToggle;
@@ -207,7 +193,6 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _monitorFreeze?.Dispose();
         _cursorHighlight?.Dispose();
         _zoomController?.Dispose();
         _magnification?.Dispose();

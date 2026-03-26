@@ -27,7 +27,11 @@ public class ZoomController : IDisposable
 
     // View lock (default ON)
     private bool _viewLocked = true;
-    private bool _middleDragging; // Temporary cursor tracking while middle button held
+
+    // Middle-click drag tracking
+    private bool _middleDragging;
+    private int _dragStartCursorX, _dragStartCursorY;
+    private float _dragStartViewX, _dragStartViewY;
 
     // Settings
     public float TargetZoomLevel { get; set; } = 2.0f;
@@ -35,10 +39,10 @@ public class ZoomController : IDisposable
     public float CursorTrackingSpeed { get; set; } = 0.25f;
 
     // Constants
-    private const float MinZoom = 1.0f;
+    private const float MinZoom = 1.25f;
     private const float MaxZoom = 6.0f;
     private const float ZoomStep = 0.25f;
-    private const int ScrollAnimationMs = 200;
+    private const int AdjustAnimationMs = 200;
 
     public bool IsZoomed => _state != ZoomState.Idle;
 
@@ -54,6 +58,7 @@ public class ZoomController : IDisposable
         _timer.Tick += OnTimerTick;
     }
 
+    /// <summary>Ctrl+Alt+Z — toggle zoom to preset level</summary>
     public void Toggle()
     {
         if (_state == ZoomState.Idle)
@@ -62,35 +67,46 @@ public class ZoomController : IDisposable
             AnimateTo(1.0f, ZoomDurationMs);
     }
 
-    public void ScrollZoom(int direction)
+    /// <summary>Ctrl+Alt+Plus — zoom in one step</summary>
+    public void ZoomInStep()
     {
-        float newTarget = _targetScale + (direction * ZoomStep);
-        newTarget = MathF.Round(newTarget / ZoomStep) * ZoomStep;
-        newTarget = Math.Clamp(newTarget, MinZoom, MaxZoom);
-
-        if (newTarget <= 1.0f)
+        if (_state == ZoomState.Idle)
         {
-            AnimateTo(1.0f, ScrollAnimationMs);
+            // First press: zoom to minimum level
+            AnimateTo(MinZoom, AdjustAnimationMs);
             return;
         }
 
-        if (!_monitorCaptured)
+        float newTarget = _targetScale + ZoomStep;
+        newTarget = MathF.Round(newTarget / ZoomStep) * ZoomStep;
+        newTarget = Math.Clamp(newTarget, MinZoom, MaxZoom);
+
+        _startScale = _currentScale;
+        _targetScale = newTarget;
+        _animationStart = DateTime.UtcNow;
+        _animationDuration = TimeSpan.FromMilliseconds(AdjustAnimationMs);
+        _state = ZoomState.Animating;
+    }
+
+    /// <summary>Ctrl+Alt+Minus — zoom out one step</summary>
+    public void ZoomOutStep()
+    {
+        if (_state == ZoomState.Idle) return;
+
+        float newTarget = _targetScale - ZoomStep;
+        newTarget = MathF.Round(newTarget / ZoomStep) * ZoomStep;
+
+        if (newTarget < MinZoom)
         {
-            User32.GetCursorPos(out var cursor);
-            _activeMonitorBounds = MagnificationService.GetMonitorBounds(cursor.X, cursor.Y);
-            _smoothX = cursor.X;
-            _smoothY = cursor.Y;
-            _monitorCaptured = true;
-            _viewLocked = true;
+            AnimateTo(1.0f, AdjustAnimationMs);
+            return;
         }
 
         _startScale = _currentScale;
         _targetScale = newTarget;
         _animationStart = DateTime.UtcNow;
-        _animationDuration = TimeSpan.FromMilliseconds(ScrollAnimationMs);
+        _animationDuration = TimeSpan.FromMilliseconds(AdjustAnimationMs);
         _state = ZoomState.Animating;
-        _timer.Start();
-        _onZoomStateChanged(true, _activeMonitorBounds);
     }
 
     public void ToggleViewLock()
@@ -100,11 +116,20 @@ public class ZoomController : IDisposable
     }
 
     /// <summary>
-    /// Middle-click drag: while held, viewport follows cursor (temporary tracking).
-    /// On release, viewport locks at current position.
+    /// Middle-click drag: viewport tracks cursor 1:1 from drag start point.
+    /// No initial jump — uses delta from where drag started.
     /// </summary>
     public void SetMiddleDragging(bool dragging)
     {
+        if (dragging && !_middleDragging && _state != ZoomState.Idle)
+        {
+            // Capture start positions
+            User32.GetCursorPos(out var cursor);
+            _dragStartCursorX = cursor.X;
+            _dragStartCursorY = cursor.Y;
+            _dragStartViewX = _smoothX;
+            _dragStartViewY = _smoothY;
+        }
         _middleDragging = dragging;
     }
 
@@ -114,6 +139,7 @@ public class ZoomController : IDisposable
         _currentScale = 1.0f;
         _targetScale = 1.0f;
         _viewLocked = true;
+        _middleDragging = false;
         _monitorCaptured = false;
         _timer.Stop();
         _magnification.Reset();
@@ -170,10 +196,18 @@ public class ZoomController : IDisposable
             }
         }
 
-        // 2. Cursor tracking — active when view unlocked OR middle-dragging
+        // 2. Viewport movement
         User32.GetCursorPos(out var cursor);
-        if (!_viewLocked || _middleDragging)
+
+        if (_middleDragging)
         {
+            // 1:1 grab-and-drag: viewport moves by exact delta from drag start
+            _smoothX = _dragStartViewX + (cursor.X - _dragStartCursorX);
+            _smoothY = _dragStartViewY + (cursor.Y - _dragStartCursorY);
+        }
+        else if (!_viewLocked)
+        {
+            // Smooth cursor tracking
             float dx = cursor.X - _smoothX;
             float dy = cursor.Y - _smoothY;
             float distance = MathF.Sqrt(dx * dx + dy * dy);

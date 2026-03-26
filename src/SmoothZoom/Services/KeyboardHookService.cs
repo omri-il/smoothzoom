@@ -20,10 +20,11 @@ public class KeyboardHookService : IDisposable
     public event Action? ToggleZoomPressed;
     public event Action? PanicResetPressed;
     public event Action? ViewLockPressed;
-    public event Action<int>? ScrollWheel;
+    public event Action? ZoomInStepPressed;
+    public event Action? ZoomOutStepPressed;
     public event Action? HighlightTogglePressed;
     public event Action? HelpTogglePressed;
-    public event Action<bool>? MiddleButtonChanged; // true = pressed, false = released
+    public event Action<bool>? MiddleButtonChanged;
 
     public KeyboardHookService()
     {
@@ -98,6 +99,8 @@ public class KeyboardHookService : IDisposable
                     case 0x4C: ViewLockPressed?.Invoke(); break;
                     case 0x48: HighlightTogglePressed?.Invoke(); break;
                     case 0xBF: HelpTogglePressed?.Invoke(); break;
+                    case 0xBB: ZoomInStepPressed?.Invoke(); break;  // VK_OEM_PLUS (=/+)
+                    case 0xBD: ZoomOutStepPressed?.Invoke(); break; // VK_OEM_MINUS (-/_)
                     default: handled = false; break;
                 }
                 // Swallow the key to prevent Windows "ding" sound
@@ -114,21 +117,7 @@ public class KeyboardHookService : IDisposable
         {
             int msg = (int)wParam;
 
-            if (msg == User32.WM_MOUSEWHEEL)
-            {
-                var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
-                int delta = (short)(mouse.mouseData >> 16);
-
-                bool ctrlHeld = (User32.GetAsyncKeyState(User32.VK_CONTROL) & 0x8000) != 0;
-                bool altHeld = (User32.GetAsyncKeyState(User32.VK_MENU) & 0x8000) != 0;
-
-                if (ctrlHeld && altHeld)
-                {
-                    ScrollWheel?.Invoke(delta > 0 ? 1 : -1);
-                    return (IntPtr)1;
-                }
-            }
-            else if (msg == User32.WM_MBUTTONDOWN)
+            if (msg == User32.WM_MBUTTONDOWN)
             {
                 MiddleButtonChanged?.Invoke(true);
             }

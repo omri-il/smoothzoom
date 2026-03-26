@@ -17,8 +17,10 @@ Lightweight Windows background utility for smooth, GPU-accelerated screen zoomin
 | Shortcut | Action |
 |----------|--------|
 | Ctrl+Alt+Z | Toggle zoom in/out |
-| Ctrl+Alt+Scroll | Adjust zoom level (0.25x steps) |
-| Ctrl+Alt+L | Lock/unlock viewport |
+| Ctrl+Alt+Plus | Zoom in more (+0.25x) |
+| Ctrl+Alt+Minus | Zoom out (-0.25x) |
+| Ctrl+Alt+L | Toggle cursor tracking (default: off) |
+| Middle-click drag | Pan the zoomed view |
 | Ctrl+Alt+H | Toggle cursor highlight ring |
 | Ctrl+Alt+/ | Show/hide help overlay |
 | Ctrl+Alt+Esc | Panic reset (instant zoom out) |
