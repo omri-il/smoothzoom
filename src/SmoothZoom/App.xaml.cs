@@ -13,17 +13,14 @@ public partial class App : System.Windows.Application
     private WinForms.NotifyIcon? _trayIcon;
     private KeyboardHookService? _keyboardHook;
     private MagnificationService? _magnification;
-    private bool _isZoomed;
-    private float _targetZoom = 2.0f;
+    private ZoomController? _zoomController;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // Crash recovery: reset any stuck zoom from previous crash
         SetupCrashRecovery();
 
-        // Single-instance enforcement
         _mutex = new Mutex(true, "Global\\SmoothZoomMutex", out bool createdNew);
         if (!createdNew)
         {
@@ -33,7 +30,6 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        // Initialize magnification API
         _magnification = new MagnificationService();
         if (!_magnification.Initialize())
         {
@@ -41,6 +37,8 @@ public partial class App : System.Windows.Application
                 "Failed to initialize Magnification API.\nThe app may not work correctly.",
                 "SmoothZoom", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+
+        _zoomController = new ZoomController(_magnification, OnZoomStateChanged);
 
         SetupTrayIcon();
         SetupKeyboardHook();
@@ -56,6 +54,11 @@ public partial class App : System.Windows.Application
         {
             MagnificationApi.MagSetFullscreenTransform(1.0f, 0, 0);
         };
+    }
+
+    private void OnZoomStateChanged(bool isZoomed)
+    {
+        UpdateTrayIcon(isZoomed);
     }
 
     private void SetupTrayIcon()
@@ -99,50 +102,19 @@ public partial class App : System.Windows.Application
         return Drawing.Icon.FromHandle(bitmap.GetHicon());
     }
 
-    private void UpdateTrayIcon()
+    private void UpdateTrayIcon(bool isZoomed)
     {
         if (_trayIcon == null) return;
-        _trayIcon.Icon = CreateIcon(_isZoomed);
-        _trayIcon.Text = _isZoomed ? "SmoothZoom (Zoomed)" : "SmoothZoom";
+        _trayIcon.Icon = CreateIcon(isZoomed);
+        _trayIcon.Text = isZoomed ? "SmoothZoom (Zoomed)" : "SmoothZoom";
     }
 
     private void SetupKeyboardHook()
     {
         _keyboardHook = new KeyboardHookService();
-        _keyboardHook.ToggleZoomPressed += OnToggleZoom;
-        _keyboardHook.PanicResetPressed += OnPanicReset;
-        _keyboardHook.ViewLockPressed += () =>
-        {
-            System.Diagnostics.Debug.WriteLine("SmoothZoom: View lock pressed (Ctrl+Alt+L)");
-        };
-    }
-
-    private void OnToggleZoom()
-    {
-        if (_magnification == null) return;
-
-        if (!_isZoomed)
-        {
-            // Zoom in: get cursor position and monitor bounds
-            User32.GetCursorPos(out var cursor);
-            var bounds = MagnificationService.GetMonitorBounds(cursor.X, cursor.Y);
-            _magnification.SetZoom(_targetZoom, cursor.X, cursor.Y, bounds);
-            _isZoomed = true;
-        }
-        else
-        {
-            // Zoom out
-            _magnification.Reset();
-            _isZoomed = false;
-        }
-        UpdateTrayIcon();
-    }
-
-    private void OnPanicReset()
-    {
-        _magnification?.Reset();
-        _isZoomed = false;
-        UpdateTrayIcon();
+        _keyboardHook.ToggleZoomPressed += () => _zoomController?.Toggle();
+        _keyboardHook.PanicResetPressed += () => _zoomController?.PanicReset();
+        _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
     }
 
     private void OnSettingsClicked(object? sender, EventArgs e)
@@ -153,12 +125,13 @@ public partial class App : System.Windows.Application
 
     private void OnQuitClicked(object? sender, EventArgs e)
     {
-        _magnification?.Reset();
+        _zoomController?.PanicReset();
         Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _zoomController?.Dispose();
         _magnification?.Dispose();
         if (_trayIcon != null)
         {
