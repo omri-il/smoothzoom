@@ -20,14 +20,14 @@ public class ZoomController : IDisposable
     private DateTime _animationStart;
     private TimeSpan _animationDuration;
 
-    // Cursor tracking (smoothed)
+    // Cursor tracking
     private float _smoothX;
     private float _smoothY;
     private User32.RECT _activeMonitorBounds;
     private bool _monitorCaptured;
 
-    // View lock
-    private bool _viewLocked;
+    // View lock — DEFAULT ON (screen stays fixed, cursor moves freely)
+    private bool _viewLocked = true;
 
     // Configurable settings
     public float TargetZoomLevel { get; set; } = 2.0f;
@@ -38,7 +38,6 @@ public class ZoomController : IDisposable
     private const float MinZoom = 1.0f;
     private const float MaxZoom = 6.0f;
     private const float ZoomStep = 0.25f;
-    private const int ScrollAnimationMs = 150;
 
     public bool IsZoomed => _state != ZoomState.Idle;
 
@@ -49,14 +48,11 @@ public class ZoomController : IDisposable
 
         _timer = new DispatcherTimer(DispatcherPriority.Render)
         {
-            Interval = TimeSpan.FromMilliseconds(8) // ~120fps for smoother panning
+            Interval = TimeSpan.FromMilliseconds(8)
         };
         _timer.Tick += OnTimerTick;
     }
 
-    /// <summary>
-    /// Toggle zoom: if idle, zoom to TargetZoomLevel. If zoomed, zoom back to 1x.
-    /// </summary>
     public void Toggle()
     {
         if (_state == ZoomState.Idle)
@@ -66,8 +62,7 @@ public class ZoomController : IDisposable
     }
 
     /// <summary>
-    /// Scroll to zoom: each notch adds/removes ZoomStep.
-    /// Scrolling up from idle starts the zoom. Scrolling down to 1.0x exits zoom.
+    /// Scroll to zoom: instant scale change per notch (no animation = no flicker).
     /// </summary>
     public void ScrollZoom(int direction)
     {
@@ -77,23 +72,34 @@ public class ZoomController : IDisposable
 
         if (newTarget <= 1.0f)
         {
-            AnimateTo(1.0f, ScrollAnimationMs);
+            // Zoom out completely — snap to 1x and reset
+            _currentScale = 1.0f;
+            _targetScale = 1.0f;
+            _state = ZoomState.Idle;
+            _monitorCaptured = false;
+            _timer.Stop();
+            _magnification.Reset();
+            _onZoomStateChanged(false);
             return;
         }
 
-        // If already zoomed/animating, smoothly transition from current position
-        if (_state == ZoomState.Zoomed || _state == ZoomState.Animating)
+        // Capture monitor on first zoom
+        if (!_monitorCaptured)
         {
-            _startScale = _currentScale; // Always start from where we are NOW
-            _targetScale = newTarget;
-            _animationStart = DateTime.UtcNow;
-            _animationDuration = TimeSpan.FromMilliseconds(ScrollAnimationMs);
-            _state = ZoomState.Animating;
-            return;
+            User32.GetCursorPos(out var cursor);
+            _activeMonitorBounds = MagnificationService.GetMonitorBounds(cursor.X, cursor.Y);
+            _smoothX = cursor.X;
+            _smoothY = cursor.Y;
+            _monitorCaptured = true;
+            _viewLocked = true; // Default: locked view
         }
 
-        // First scroll from idle — full activation
-        AnimateTo(newTarget, ScrollAnimationMs);
+        // Instant scale change — no animation, no flicker
+        _currentScale = newTarget;
+        _targetScale = newTarget;
+        _state = ZoomState.Zoomed;
+        _timer.Start();
+        _onZoomStateChanged(true);
     }
 
     public void ToggleViewLock()
@@ -107,7 +113,7 @@ public class ZoomController : IDisposable
         _state = ZoomState.Idle;
         _currentScale = 1.0f;
         _targetScale = 1.0f;
-        _viewLocked = false;
+        _viewLocked = true;
         _monitorCaptured = false;
         _timer.Stop();
         _magnification.Reset();
@@ -116,7 +122,6 @@ public class ZoomController : IDisposable
 
     private void AnimateTo(float target, int durationMs)
     {
-        // Capture monitor on first zoom activation
         if (!_monitorCaptured)
         {
             User32.GetCursorPos(out var cursor);
@@ -131,7 +136,7 @@ public class ZoomController : IDisposable
         _animationStart = DateTime.UtcNow;
         _animationDuration = TimeSpan.FromMilliseconds(durationMs);
         _state = ZoomState.Animating;
-        _viewLocked = false;
+        _viewLocked = true; // Default: locked view
 
         _timer.Start();
         _onZoomStateChanged(target > 1.0f);
@@ -139,7 +144,7 @@ public class ZoomController : IDisposable
 
     private void OnTimerTick(object? sender, EventArgs e)
     {
-        // 1. Update zoom animation
+        // 1. Update zoom animation (only for Ctrl+Alt+Z toggle, not scroll)
         if (_state == ZoomState.Animating)
         {
             float elapsed = (float)(DateTime.UtcNow - _animationStart).TotalMilliseconds;
@@ -152,7 +157,6 @@ public class ZoomController : IDisposable
                 _currentScale = _targetScale;
                 if (_targetScale <= 1.0f)
                 {
-                    // Fully zoomed out — go idle
                     _state = ZoomState.Idle;
                     _monitorCaptured = false;
                     _magnification.Reset();
@@ -166,7 +170,7 @@ public class ZoomController : IDisposable
             }
         }
 
-        // 2. Smooth cursor tracking (unless view is locked)
+        // 2. Cursor tracking (only when NOT view-locked)
         User32.GetCursorPos(out var cursor);
         if (!_viewLocked)
         {
@@ -185,6 +189,7 @@ public class ZoomController : IDisposable
                 _smoothY += dy * CursorTrackingSpeed;
             }
         }
+        // When view-locked, _smoothX/_smoothY stay where they were captured
 
         // 3. Apply transform
         _magnification.SetZoom(_currentScale,
