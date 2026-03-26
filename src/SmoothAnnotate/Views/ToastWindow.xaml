@@ -1,0 +1,24 @@
+<Window x:Class="SmoothAnnotate.Views.ToastWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        IsHitTestVisible="False">
+
+    <Border x:Name="ToastBorder"
+            Padding="20,10"
+            CornerRadius="8"
+            Background="#DD000000"
+            Opacity="0">
+        <TextBlock x:Name="ToastText"
+                   FontSize="20"
+                   FontFamily="Segoe UI"
+                   FontWeight="SemiBold"
+                   Foreground="White"/>
+    </Border>
+</Window>

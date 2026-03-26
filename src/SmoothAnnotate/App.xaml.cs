@@ -1,3 +1,4 @@
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
@@ -17,44 +18,81 @@ public partial class App : System.Windows.Application
     private OverlayWindow? _overlayWindow;
     private AnnotationSettings _settings = new();
 
+    private static readonly string LogFile = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SmoothAnnotate", "debug.log");
+
+    public static void Log(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogFile)!);
+            File.AppendAllText(LogFile, $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n");
+        }
+        catch { }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Clear old log
+        try { File.Delete(LogFile); } catch { }
+        Log("=== SmoothAnnotate starting ===");
 
         SetupCrashRecovery();
 
         _mutex = new Mutex(true, "Global\\SmoothAnnotateMutex", out bool createdNew);
         if (!createdNew)
         {
+            Log("ERROR: Another instance is already running");
             System.Windows.MessageBox.Show("SmoothAnnotate is already running.", "SmoothAnnotate",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
 
-        _settings = SettingsService.Load();
+        try
+        {
+            _settings = SettingsService.Load();
+            Log("Settings loaded");
 
-        _overlayWindow = new OverlayWindow(_settings);
-        _overlayWindow.Show();
+            _overlayWindow = new OverlayWindow(_settings);
+            _overlayWindow.Show();
+            Log("Overlay window created and shown");
 
-        // Initialize services after window is created
-        var laserColor = (Color)ColorConverter.ConvertFromString(_settings.LaserColor);
-        var laserService = new LaserService(_overlayWindow.FindName("DrawCanvas") as System.Windows.Controls.InkCanvas
-            ?? throw new InvalidOperationException("DrawCanvas not found"),
-            _settings.LaserFadeMs, laserColor);
-        var stopwatchService = new StopwatchService();
-        _overlayWindow.InitializeServices(laserService, stopwatchService);
+            // Initialize services after window is created
+            var laserColor = (Color)ColorConverter.ConvertFromString(_settings.LaserColor);
+            var laserService = new LaserService(_overlayWindow.FindName("DrawCanvas") as System.Windows.Controls.InkCanvas
+                ?? throw new InvalidOperationException("DrawCanvas not found"),
+                _settings.LaserFadeMs, laserColor);
+            var stopwatchService = new StopwatchService();
+            _overlayWindow.InitializeServices(laserService, stopwatchService);
+            Log("Services initialized");
 
-        SetupTrayIcon();
-        SetupKeyboardHook();
+            SetupTrayIcon();
+            Log("Tray icon created");
+
+            SetupKeyboardHook();
+            Log("Keyboard hook installed - ready! Press Ctrl+Alt+Shift+D to test");
+        }
+        catch (Exception ex)
+        {
+            Log($"STARTUP ERROR: {ex}");
+            System.Windows.MessageBox.Show($"Startup error: {ex.Message}", "SmoothAnnotate Error");
+        }
     }
 
     private void SetupCrashRecovery()
     {
-        AppDomain.CurrentDomain.UnhandledException += (_, _) => { };
-        DispatcherUnhandledException += (_, e) =>
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            e.Handled = true;
+            Log($"UNHANDLED EXCEPTION: {args.ExceptionObject}");
+        };
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Log($"DISPATCHER EXCEPTION: {args.Exception}");
+            args.Handled = true;
         };
     }
 

@@ -11,7 +11,7 @@ public class KeyboardHookService : IDisposable
     private readonly User32.LowLevelKeyboardProc _kbHookProc;
 
     private bool _ctrlPressed;
-    private bool _shiftPressed;
+    private bool _altPressed;
 
     // Core tools
     public event Action? DrawModeToggled;
@@ -38,11 +38,16 @@ public class KeyboardHookService : IDisposable
     private void Install()
     {
         var moduleHandle = Kernel32.GetModuleHandle(null);
+        App.Log($"GetModuleHandle returned: {moduleHandle}");
 
         _kbHookId = User32.SetWindowsHookEx(User32.WH_KEYBOARD_LL, _kbHookProc, moduleHandle, 0);
         if (_kbHookId == IntPtr.Zero)
-            throw new InvalidOperationException(
-                $"Failed to install keyboard hook. Error: {Marshal.GetLastWin32Error()}");
+        {
+            var err = Marshal.GetLastWin32Error();
+            App.Log($"HOOK FAILED! Error code: {err}");
+            throw new InvalidOperationException($"Failed to install keyboard hook. Error: {err}");
+        }
+        App.Log($"Keyboard hook installed OK. Handle: {_kbHookId}");
     }
 
     private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -52,62 +57,76 @@ public class KeyboardHookService : IDisposable
             var kbd = Marshal.PtrToStructure<User32.KBDLLHOOKSTRUCT>(lParam);
             bool isKeyDown = wParam == User32.WM_KEYDOWN || wParam == User32.WM_SYSKEYDOWN;
 
+            // Track modifier state
             switch (kbd.vkCode)
             {
-                case 0xA0 or 0xA1: // VK_LSHIFT / VK_RSHIFT
-                    _shiftPressed = isKeyDown;
-                    break;
                 case 0xA2 or 0xA3: // VK_LCONTROL / VK_RCONTROL
                     _ctrlPressed = isKeyDown;
                     break;
+                case 0xA4 or 0xA5: // VK_LMENU / VK_RMENU (Alt)
+                    _altPressed = isKeyDown;
+                    break;
             }
 
-            if (isKeyDown && _ctrlPressed && _shiftPressed)
+            if (isKeyDown)
             {
+                // F-key hotkeys (no modifiers needed - simple and reliable)
                 switch (kbd.vkCode)
                 {
-                    case 0x44: // VK_D - Draw mode cycle
+                    case 0x78: // F9 - Toggle draw mode
+                        App.Log("F9 pressed -> DrawModeToggled");
                         DrawModeToggled?.Invoke();
                         break;
-                    case 0x43: // VK_C - Clear
+                    case 0x79: // F10 - Clear canvas
+                        App.Log("F10 pressed -> ClearInk");
                         ClearInk?.Invoke();
                         break;
-                    case 0x4C: // VK_L - Laser
+                    case 0x7A: // F11 - Laser pointer
+                        App.Log("F11 pressed -> LaserToggled");
                         LaserToggled?.Invoke();
                         break;
-                    case 0x53: // VK_S - Timer start/pause
+                    case 0x7B: // F12 - Timer start/pause
+                        App.Log("F12 pressed -> TimerToggled");
                         TimerToggled?.Invoke();
                         break;
-                    case 0x54: // VK_T - Timer visibility
-                        TimerVisibilityToggled?.Invoke();
-                        break;
-                    case 0x41: // VK_A - Arrow
-                        ArrowToggled?.Invoke();
-                        break;
-                    case 0x52: // VK_R - Rectangle
-                        RectangleToggled?.Invoke();
-                        break;
-                    case 0x4F: // VK_O - Circle (Oval)
-                        CircleToggled?.Invoke();
-                        break;
-                    case 0x58: // VK_X - Text
-                        TextToggled?.Invoke();
-                        break;
-                    case 0x31: // VK_1 - Red
-                        ColorChanged?.Invoke(1);
-                        break;
-                    case 0x32: // VK_2 - Blue
-                        ColorChanged?.Invoke(2);
-                        break;
-                    case 0x33: // VK_3 - Green
-                        ColorChanged?.Invoke(3);
-                        break;
-                    case 0x34: // VK_4 - White
-                        ColorChanged?.Invoke(4);
-                        break;
-                    case 0x35: // VK_5 - Yellow
-                        ColorChanged?.Invoke(5);
-                        break;
+                }
+
+                // Ctrl+Alt hotkeys for less frequent tools
+                if (_ctrlPressed && _altPressed)
+                {
+                    switch (kbd.vkCode)
+                    {
+                        case 0x54: // Ctrl+Alt+T - Timer visibility
+                            TimerVisibilityToggled?.Invoke();
+                            break;
+                        case 0x41: // Ctrl+Alt+A - Arrow
+                            ArrowToggled?.Invoke();
+                            break;
+                        case 0x52: // Ctrl+Alt+R - Rectangle
+                            RectangleToggled?.Invoke();
+                            break;
+                        case 0x4F: // Ctrl+Alt+O - Circle (Oval)
+                            CircleToggled?.Invoke();
+                            break;
+                        case 0x58: // Ctrl+Alt+X - Text
+                            TextToggled?.Invoke();
+                            break;
+                        case 0x31: // Ctrl+Alt+1 - Red
+                            ColorChanged?.Invoke(1);
+                            break;
+                        case 0x32: // Ctrl+Alt+2 - Blue
+                            ColorChanged?.Invoke(2);
+                            break;
+                        case 0x33: // Ctrl+Alt+3 - Green
+                            ColorChanged?.Invoke(3);
+                            break;
+                        case 0x34: // Ctrl+Alt+4 - White
+                            ColorChanged?.Invoke(4);
+                            break;
+                        case 0x35: // Ctrl+Alt+5 - Yellow
+                            ColorChanged?.Invoke(5);
+                            break;
+                    }
                 }
             }
         }

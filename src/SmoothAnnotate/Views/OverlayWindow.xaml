@@ -49,20 +49,6 @@
             </TextBlock>
         </Border>
 
-        <!-- Mode indicator -->
-        <Border x:Name="ModeIndicator"
-                HorizontalAlignment="Center" VerticalAlignment="Top"
-                Margin="0,40,0,0"
-                Padding="16,8"
-                CornerRadius="6"
-                Background="#CC000000"
-                IsHitTestVisible="False"
-                Opacity="0">
-            <TextBlock x:Name="ModeText"
-                       FontSize="16"
-                       FontFamily="Segoe UI"
-                       FontWeight="SemiBold"
-                       Foreground="White"/>
-        </Border>
+        <!-- Mode indicator moved to separate ToastWindow -->
     </Grid>
 </Window>

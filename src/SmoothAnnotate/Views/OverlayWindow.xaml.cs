@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Ink;
@@ -5,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using SmoothAnnotate.Models;
 using SmoothAnnotate.Services;
@@ -19,6 +21,8 @@ public partial class OverlayWindow : Window
     private readonly AnnotationSettings _settings;
     private LaserService? _laserService;
     private StopwatchService? _stopwatchService;
+    private ToastWindow? _toast;
+    private ToolbarWindow? _toolbar;
 
     // Current drawing color
     private Color _currentColor;
@@ -58,6 +62,30 @@ public partial class OverlayWindow : Window
 
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
+
+        _toast = new ToastWindow();
+        _toast.Show();
+
+        _toolbar = new ToolbarWindow();
+        _toolbar.ToolSelected += OnToolbarToolSelected;
+        _toolbar.ColorSelected += SetColor;
+        _toolbar.ClearRequested += ClearAllStrokes;
+        _toolbar.Show();
+    }
+
+    private void OnToolbarToolSelected(AnnotationTool tool)
+    {
+        if (tool == AnnotationTool.None)
+        {
+            ExitDrawMode();
+            ShowModeIndicator("CLICK-THROUGH");
+        }
+        else
+        {
+            EnterDrawMode();
+            SetTool(tool);
+            ShowModeIndicator(tool.ToString().ToUpper());
+        }
     }
 
     public void InitializeServices(LaserService laserService, StopwatchService stopwatchService)
@@ -72,6 +100,7 @@ public partial class OverlayWindow : Window
         _hwnd = new WindowInteropHelper(this).Handle;
         OverlayService.SetClickThrough(_hwnd);
         OverlayService.HideFromAltTab(_hwnd);
+        OverlayService.SetNoActivate(_hwnd);
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
@@ -192,13 +221,15 @@ public partial class OverlayWindow : Window
     {
         if (index < 1 || index > Palette.Length) return;
         _currentColor = Palette[index - 1];
+        _toolbar?.SetActiveColor(index);
 
-        // Update current tool's drawing attributes if in ink mode
+        // Update current tool's drawing attributes and cursor
         if (_currentTool is AnnotationTool.Pen or AnnotationTool.Laser)
         {
             var attrs = DrawCanvas.DefaultDrawingAttributes.Clone();
             attrs.Color = _currentColor;
             DrawCanvas.DefaultDrawingAttributes = attrs;
+            DrawCanvas.Cursor = CreateCircleCursor(_currentColor, attrs.Width);
         }
 
         string[] names = { "RED", "BLUE", "GREEN", "WHITE", "YELLOW" };
@@ -240,7 +271,11 @@ public partial class OverlayWindow : Window
         if (!_isDrawMode)
         {
             _isDrawMode = true;
+            // Set near-transparent background so WPF renders content
+            Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
             OverlayService.RemoveClickThrough(_hwnd);
+            // Raise toolbar above overlay so it stays clickable
+            _toolbar?.RaiseAboveOverlay();
         }
     }
 
@@ -248,6 +283,8 @@ public partial class OverlayWindow : Window
     {
         _isDrawMode = false;
         SetTool(AnnotationTool.None);
+        // Fully transparent so SmoothZoom and other apps are unaffected
+        Background = Brushes.Transparent;
         OverlayService.SetClickThrough(_hwnd);
     }
 
@@ -260,6 +297,7 @@ public partial class OverlayWindow : Window
         CommitActiveTextBox();
 
         _currentTool = tool;
+        _toolbar?.SetActiveTool(tool);
 
         if (IsShapeTool(tool))
         {
@@ -295,7 +333,8 @@ public partial class OverlayWindow : Window
                         StylusTip = StylusTip.Ellipse,
                         IgnorePressure = false
                     };
-                    DrawCanvas.Cursor = Cursors.Pen;
+                    DrawCanvas.UseCustomCursor = true;
+                    DrawCanvas.Cursor = CreateCircleCursor(_currentColor, _settings.PenSize);
                     _laserService?.Stop();
                     break;
 
@@ -311,13 +350,15 @@ public partial class OverlayWindow : Window
                         IgnorePressure = true,
                         IsHighlighter = true
                     };
-                    DrawCanvas.Cursor = Cursors.Hand;
+                    DrawCanvas.UseCustomCursor = true;
+                    DrawCanvas.Cursor = CreateCircleCursor(Color.FromRgb(255, 255, 0), _settings.HighlighterSize);
                     _laserService?.Stop();
                     break;
 
                 case AnnotationTool.Eraser:
                     DrawCanvas.EditingMode = InkCanvasEditingMode.EraseByStroke;
-                    DrawCanvas.Cursor = Cursors.Cross;
+                    DrawCanvas.UseCustomCursor = true;
+                    DrawCanvas.Cursor = CreateCircleCursor(Color.FromRgb(200, 200, 200), _settings.EraserSize);
                     _laserService?.Stop();
                     break;
 
@@ -332,7 +373,8 @@ public partial class OverlayWindow : Window
                         StylusTip = StylusTip.Ellipse,
                         IgnorePressure = true
                     };
-                    DrawCanvas.Cursor = Cursors.Cross;
+                    DrawCanvas.UseCustomCursor = true;
+                    DrawCanvas.Cursor = CreateCircleCursor(_currentColor, _settings.LaserSize);
                     _laserService?.Start();
                     break;
             }
@@ -560,17 +602,118 @@ public partial class OverlayWindow : Window
         _activeTextBox = null;
     }
 
+    // --- Custom Cursor ---
+
+    private static Cursor CreateCircleCursor(Color color, double size)
+    {
+        int dim = Math.Max((int)(size + 8), 24);
+        int hotspot = dim / 2;
+
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            // Outer circle (white outline for visibility on any background)
+            dc.DrawEllipse(null, new Pen(new SolidColorBrush(Colors.White), 2),
+                new Point(hotspot, hotspot), size / 2 + 2, size / 2 + 2);
+            // Inner circle (tool color)
+            dc.DrawEllipse(null, new Pen(new SolidColorBrush(color), 1.5),
+                new Point(hotspot, hotspot), size / 2, size / 2);
+            // Center dot
+            dc.DrawEllipse(new SolidColorBrush(color), null,
+                new Point(hotspot, hotspot), 1.5, 1.5);
+        }
+
+        var rtb = new RenderTargetBitmap(dim, dim, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(visual);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(rtb));
+
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        ms.Position = 0;
+
+        // Build .cur format: 22-byte header + PNG data via icon hack
+        // Simpler approach: use System.Windows.Input.Cursor from stream
+        return CursorFromBitmap(rtb, hotspot, hotspot);
+    }
+
+    private static Cursor CursorFromBitmap(RenderTargetBitmap bitmap, int hotX, int hotY)
+    {
+        int width = bitmap.PixelWidth;
+        int height = bitmap.PixelHeight;
+        int stride = width * 4;
+        byte[] pixels = new byte[stride * height];
+        bitmap.CopyPixels(pixels, stride, 0);
+
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+
+        // .cur file header
+        bw.Write((short)0);      // Reserved
+        bw.Write((short)2);      // Type: cursor
+        bw.Write((short)1);      // Image count
+
+        // Directory entry
+        bw.Write((byte)width);
+        bw.Write((byte)height);
+        bw.Write((byte)0);       // Color count
+        bw.Write((byte)0);       // Reserved
+        bw.Write((short)hotX);   // Hotspot X
+        bw.Write((short)hotY);   // Hotspot Y
+
+        // We'll write size after we know it
+        long sizePos = ms.Position;
+        bw.Write(0);              // Placeholder for size
+        bw.Write(22);             // Offset to data (header=6 + entry=16 = 22)
+
+        long dataStart = ms.Position;
+
+        // DIB header (BITMAPINFOHEADER)
+        bw.Write(40);                 // Header size
+        bw.Write(width);              // Width
+        bw.Write(height * 2);         // Height (doubled for XOR + AND masks)
+        bw.Write((short)1);           // Planes
+        bw.Write((short)32);          // Bits per pixel
+        bw.Write(0);                  // Compression (none)
+        bw.Write(0);                  // Image size (can be 0 for uncompressed)
+        bw.Write(0);                  // X pixels per meter
+        bw.Write(0);                  // Y pixels per meter
+        bw.Write(0);                  // Colors used
+        bw.Write(0);                  // Important colors
+
+        // XOR mask (BGRA, bottom-up)
+        for (int y = height - 1; y >= 0; y--)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int idx = (y * stride) + (x * 4);
+                bw.Write(pixels[idx + 0]); // B
+                bw.Write(pixels[idx + 1]); // G
+                bw.Write(pixels[idx + 2]); // R
+                bw.Write(pixels[idx + 3]); // A
+            }
+        }
+
+        // AND mask (1bpp, bottom-up) - all zeros = fully visible
+        int andStride = ((width + 31) / 32) * 4;
+        byte[] andMask = new byte[andStride * height];
+        bw.Write(andMask);
+
+        // Write actual size
+        long dataSize = ms.Position - dataStart;
+        ms.Position = sizePos;
+        bw.Write((int)dataSize);
+
+        ms.Position = 0;
+        return new Cursor(ms);
+    }
+
     // --- Mode Indicator ---
 
     private void ShowModeIndicator(string text)
     {
-        ModeText.Text = text;
-        ModeIndicator.Opacity = 1.0;
-
-        var fade = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(1200))
-        {
-            BeginTime = TimeSpan.FromMilliseconds(400)
-        };
-        ModeIndicator.BeginAnimation(OpacityProperty, fade);
+        App.Log($"ShowModeIndicator: {text}");
+        _toast?.ShowToast(text);
     }
 }

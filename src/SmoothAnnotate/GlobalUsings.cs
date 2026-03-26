@@ -7,3 +7,6 @@ global using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 global using TextBox = System.Windows.Controls.TextBox;
 global using Brushes = System.Windows.Media.Brushes;
 global using FontFamily = System.Windows.Media.FontFamily;
+global using Cursor = System.Windows.Input.Cursor;
+global using Pen = System.Windows.Media.Pen;
+global using Button = System.Windows.Controls.Button;
