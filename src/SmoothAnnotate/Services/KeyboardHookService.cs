@@ -13,11 +13,21 @@ public class KeyboardHookService : IDisposable
     private bool _ctrlPressed;
     private bool _shiftPressed;
 
+    // Core tools
     public event Action? DrawModeToggled;
     public event Action? ClearInk;
     public event Action? LaserToggled;
     public event Action? TimerToggled;
     public event Action? TimerVisibilityToggled;
+
+    // Shape tools
+    public event Action? ArrowToggled;
+    public event Action? RectangleToggled;
+    public event Action? CircleToggled;
+    public event Action? TextToggled;
+
+    // Color picker (1-5)
+    public event Action<int>? ColorChanged;
 
     public KeyboardHookService()
     {
@@ -41,7 +51,6 @@ public class KeyboardHookService : IDisposable
         {
             var kbd = Marshal.PtrToStructure<User32.KBDLLHOOKSTRUCT>(lParam);
             bool isKeyDown = wParam == User32.WM_KEYDOWN || wParam == User32.WM_SYSKEYDOWN;
-            bool isKeyUp = wParam == User32.WM_KEYUP || wParam == User32.WM_SYSKEYUP;
 
             switch (kbd.vkCode)
             {
@@ -57,20 +66,47 @@ public class KeyboardHookService : IDisposable
             {
                 switch (kbd.vkCode)
                 {
-                    case 0x44: // VK_D
+                    case 0x44: // VK_D - Draw mode cycle
                         DrawModeToggled?.Invoke();
                         break;
-                    case 0x43: // VK_C
+                    case 0x43: // VK_C - Clear
                         ClearInk?.Invoke();
                         break;
-                    case 0x4C: // VK_L
+                    case 0x4C: // VK_L - Laser
                         LaserToggled?.Invoke();
                         break;
-                    case 0x53: // VK_S
+                    case 0x53: // VK_S - Timer start/pause
                         TimerToggled?.Invoke();
                         break;
-                    case 0x54: // VK_T
+                    case 0x54: // VK_T - Timer visibility
                         TimerVisibilityToggled?.Invoke();
+                        break;
+                    case 0x41: // VK_A - Arrow
+                        ArrowToggled?.Invoke();
+                        break;
+                    case 0x52: // VK_R - Rectangle
+                        RectangleToggled?.Invoke();
+                        break;
+                    case 0x4F: // VK_O - Circle (Oval)
+                        CircleToggled?.Invoke();
+                        break;
+                    case 0x58: // VK_X - Text
+                        TextToggled?.Invoke();
+                        break;
+                    case 0x31: // VK_1 - Red
+                        ColorChanged?.Invoke(1);
+                        break;
+                    case 0x32: // VK_2 - Blue
+                        ColorChanged?.Invoke(2);
+                        break;
+                    case 0x33: // VK_3 - Green
+                        ColorChanged?.Invoke(3);
+                        break;
+                    case 0x34: // VK_4 - White
+                        ColorChanged?.Invoke(4);
+                        break;
+                    case 0x35: // VK_5 - Yellow
+                        ColorChanged?.Invoke(5);
                         break;
                 }
             }

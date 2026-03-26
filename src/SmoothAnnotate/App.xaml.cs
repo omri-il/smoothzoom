@@ -98,11 +98,22 @@ public partial class App : System.Windows.Application
     private void SetupKeyboardHook()
     {
         _keyboardHook = new KeyboardHookService();
+
+        // Core tools
         _keyboardHook.DrawModeToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleDrawMode());
         _keyboardHook.ClearInk += () => Dispatcher.Invoke(() => _overlayWindow?.ClearAllStrokes());
         _keyboardHook.LaserToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleLaser());
         _keyboardHook.TimerToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleTimer());
         _keyboardHook.TimerVisibilityToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleTimerVisibility());
+
+        // Shape tools
+        _keyboardHook.ArrowToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleArrow());
+        _keyboardHook.RectangleToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleRectangle());
+        _keyboardHook.CircleToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleCircle());
+        _keyboardHook.TextToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleText());
+
+        // Color picker
+        _keyboardHook.ColorChanged += (idx) => Dispatcher.Invoke(() => _overlayWindow?.SetColor(idx));
     }
 
     private void OnQuitClicked(object? sender, EventArgs e)

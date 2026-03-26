@@ -10,7 +10,7 @@
         ResizeMode="NoResize">
 
     <Grid>
-        <!-- Drawing layer -->
+        <!-- Ink drawing layer (Pen, Highlighter, Eraser, Laser) -->
         <InkCanvas x:Name="DrawCanvas"
                    Background="Transparent"
                    EditingMode="None"
@@ -22,7 +22,12 @@
             </InkCanvas.DefaultDrawingAttributes>
         </InkCanvas>
 
-        <!-- Stopwatch HUD (added in Phase 4) -->
+        <!-- Shape drawing layer (Arrow, Rectangle, Circle, Text) -->
+        <Canvas x:Name="ShapeCanvas"
+                Background="Transparent"
+                IsHitTestVisible="False"/>
+
+        <!-- Stopwatch HUD -->
         <Border x:Name="TimerContainer"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Margin="20"

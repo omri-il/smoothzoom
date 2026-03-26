@@ -6,5 +6,9 @@ public enum AnnotationTool
     Pen,
     Highlighter,
     Eraser,
-    Laser
+    Laser,
+    Arrow,
+    Rectangle,
+    Circle,
+    Text
 }
