@@ -49,6 +49,9 @@
             </TextBlock>
         </Border>
 
-        <!-- Mode indicator moved to separate ToastWindow -->
+        <!-- Confetti layer (on top of everything) -->
+        <Canvas x:Name="ConfettiCanvas"
+                Background="Transparent"
+                IsHitTestVisible="False"/>
     </Grid>
 </Window>

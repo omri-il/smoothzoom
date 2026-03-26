@@ -20,6 +20,7 @@ public partial class ToolbarWindow : Window
     public event Action? ClearRequested;
     public event Action? TextSizeCycled;
     public event Action? CloseRequested;
+    public event Action? ConfettiRequested;
 
     public ToolbarWindow()
     {
@@ -101,6 +102,11 @@ public partial class ToolbarWindow : Window
     {
         CloseRequested?.Invoke();
         e.Handled = true;
+    }
+
+    private void ConfettiButton_Click(object sender, RoutedEventArgs e)
+    {
+        ConfettiRequested?.Invoke();
     }
 
     private void TextSizeButton_Click(object sender, RoutedEventArgs e)

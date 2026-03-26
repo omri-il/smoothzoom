@@ -22,6 +22,7 @@ public partial class OverlayWindow : Window
     private readonly AnnotationSettings _settings;
     private LaserService? _laserService;
     private StopwatchService? _stopwatchService;
+    private ConfettiService? _confettiService;
     private ToastWindow? _toast;
     private ToolbarWindow? _toolbar;
     private readonly System.Windows.Threading.DispatcherTimer _toolbarHitTimer;
@@ -41,7 +42,7 @@ public partial class OverlayWindow : Window
     // Text tool state
     private TextBox? _activeTextBox;
     private double _textSize = 32; // Medium default
-    private static readonly double[] TextSizes = { 24, 32, 48 }; // Small, Medium, Large
+    private static readonly double[] TextSizes = { 24, 32, 48, 72 }; // Small, Medium, Large, XL
     private int _textSizeIndex = 1; // Start at Medium
 
     // Color palette
@@ -72,6 +73,8 @@ public partial class OverlayWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
 
+        _confettiService = new ConfettiService(ConfettiCanvas);
+
         _toast = new ToastWindow();
         _toast.Show();
 
@@ -82,9 +85,10 @@ public partial class OverlayWindow : Window
         _toolbar.TextSizeCycled += () =>
         {
             CycleTextSize();
-            string[] labels = { "Small", "Medium", "Large" };
+            string[] labels = { "Small", "Medium", "Large", "XL" };
             _toolbar?.UpdateTextSizeLabel(labels[_textSizeIndex]);
         };
+        _toolbar.ConfettiRequested += TriggerConfetti;
         _toolbar.CloseRequested += () => System.Windows.Application.Current.Shutdown();
         _toolbar.Show();
 
@@ -455,20 +459,19 @@ public partial class OverlayWindow : Window
 
                 case AnnotationTool.Laser:
                     DrawCanvas.EditingMode = InkCanvasEditingMode.Ink;
-                    // Draw the GLOW as the live stroke (wide, semi-transparent)
-                    // Core stroke is added on StrokeCollected by LaserService
-                    double glowWidth = _settings.LaserSize * 3.5;
+                    // Single bright stroke - wider for natural glow look, no separate glow layer
+                    double laserWidth = _settings.LaserSize * 2;
                     DrawCanvas.DefaultDrawingAttributes = new DrawingAttributes
                     {
-                        Color = Color.FromArgb(80, _currentColor.R, _currentColor.G, _currentColor.B),
-                        Width = glowWidth,
-                        Height = glowWidth,
+                        Color = Color.FromArgb(200, _currentColor.R, _currentColor.G, _currentColor.B),
+                        Width = laserWidth,
+                        Height = laserWidth,
                         FitToCurve = true,
                         StylusTip = StylusTip.Ellipse,
                         IgnorePressure = true
                     };
                     DrawCanvas.UseCustomCursor = true;
-                    DrawCanvas.Cursor = CreateCircleCursor(_currentColor, _settings.LaserSize);
+                    DrawCanvas.Cursor = CreateCircleCursor(_currentColor, laserWidth);
                     _laserService?.SetBaseColor(_currentColor);
                     _laserService?.Start();
                     break;
@@ -559,21 +562,24 @@ public partial class OverlayWindow : Window
                 X2 = _shapeStartPoint.X,
                 Y2 = _shapeStartPoint.Y,
                 StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Triangle
+                StrokeEndLineCap = PenLineCap.Flat,
+                Effect = CreateShapeShadow()
             },
             AnnotationTool.Rectangle => new System.Windows.Shapes.Rectangle
             {
                 Stroke = brush,
                 StrokeThickness = _settings.PenSize,
                 Fill = Brushes.Transparent,
-                RadiusX = 2,
-                RadiusY = 2
+                RadiusX = 4,
+                RadiusY = 4,
+                Effect = CreateShapeShadow()
             },
             AnnotationTool.Circle => new Ellipse
             {
                 Stroke = brush,
                 StrokeThickness = _settings.PenSize,
-                Fill = Brushes.Transparent
+                Fill = Brushes.Transparent,
+                Effect = CreateShapeShadow()
             },
             _ => null
         };
@@ -664,24 +670,38 @@ public partial class OverlayWindow : Window
         double length = Math.Sqrt(dx * dx + dy * dy);
         if (length < 5) return;
 
-        double headSize = Math.Max(12, _settings.PenSize * 4);
+        // Bigger head, sharper point (0.22 rad ≈ 12.6° for a crisp arrow)
+        double headSize = Math.Max(20, _settings.PenSize * 6);
         double angle = Math.Atan2(dy, dx);
+        double spread = 0.22;
 
+        var tip = new Point(line.X2, line.Y2);
         var p1 = new Point(
-            line.X2 - headSize * Math.Cos(angle - 0.4),
-            line.Y2 - headSize * Math.Sin(angle - 0.4));
+            tip.X - headSize * Math.Cos(angle - spread),
+            tip.Y - headSize * Math.Sin(angle - spread));
         var p2 = new Point(
-            line.X2 - headSize * Math.Cos(angle + 0.4),
-            line.Y2 - headSize * Math.Sin(angle + 0.4));
+            tip.X - headSize * Math.Cos(angle + spread),
+            tip.Y - headSize * Math.Sin(angle + spread));
 
         var arrowHead = new Polygon
         {
-            Points = new PointCollection { new(line.X2, line.Y2), p1, p2 },
+            Points = new PointCollection { tip, p1, p2 },
             Fill = new SolidColorBrush(_currentColor),
-            Stroke = new SolidColorBrush(_currentColor),
-            StrokeThickness = 1
+            StrokeLineJoin = PenLineJoin.Round,
+            Effect = CreateShapeShadow()
         };
         ShapeCanvas.Children.Add(arrowHead);
+    }
+
+    private static System.Windows.Media.Effects.DropShadowEffect CreateShapeShadow()
+    {
+        return new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = Colors.Black,
+            BlurRadius = 6,
+            ShadowDepth = 2,
+            Opacity = 0.3
+        };
     }
 
     // --- Text Tool ---
@@ -766,13 +786,21 @@ public partial class OverlayWindow : Window
         _activeTextBox = null;
     }
 
+    // --- Fun Effects ---
+
+    public void TriggerConfetti()
+    {
+        _confettiService?.FullScreenBurst(ActualWidth, ActualHeight);
+        ShowModeIndicator("🎉");
+    }
+
     // --- Text Size ---
 
     public void CycleTextSize()
     {
         _textSizeIndex = (_textSizeIndex + 1) % TextSizes.Length;
         _textSize = TextSizes[_textSizeIndex];
-        string[] labels = { "SMALL", "MEDIUM", "LARGE" };
+        string[] labels = { "SMALL", "MEDIUM", "LARGE", "XL" };
         ShowModeIndicator($"TEXT {labels[_textSizeIndex]}");
     }
 

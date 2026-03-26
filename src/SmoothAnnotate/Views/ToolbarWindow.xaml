@@ -201,6 +201,15 @@
                 </Border>
             </StackPanel>
 
+            <!-- Fun Effects -->
+            <Border Height="1" Background="#15FFFFFF" Margin="6,4"/>
+            <TextBlock Text="FUN" FontSize="8" Foreground="#40FFFFFF"
+                       FontFamily="Segoe UI" FontWeight="Bold" Margin="10,0,0,3"/>
+
+            <Button x:Name="BtnConfetti" Click="ConfettiButton_Click" Margin="2,1">
+                <TextBlock Text="🎉  Confetti" HorizontalAlignment="Left"/>
+            </Button>
+
             <!-- Actions -->
             <Border Height="1" Background="#15FFFFFF" Margin="6,4"/>
 
