@@ -517,7 +517,7 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        // Select mode: try to grab an existing shape
+        // Select mode: try to grab an existing shape, or pass through to InkCanvas
         if (_currentTool == AnnotationTool.Select)
         {
             var pos = e.GetPosition(ShapeCanvas);
@@ -539,8 +539,17 @@ public partial class OverlayWindow : Window
                     _dragOffset = new Point(pos.X - left, pos.Y - top);
                     ShapeCanvas.CaptureMouse();
                     e.Handled = true;
+                    return;
                 }
             }
+            // No shape hit - temporarily disable ShapeCanvas so InkCanvas Select mode works
+            ShapeCanvas.IsHitTestVisible = false;
+            // Re-enable after a short delay so next click works
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_currentTool == AnnotationTool.Select)
+                    ShapeCanvas.IsHitTestVisible = true;
+            }), System.Windows.Threading.DispatcherPriority.Input);
             return;
         }
 
@@ -569,7 +578,7 @@ public partial class OverlayWindow : Window
             {
                 Stroke = brush,
                 StrokeThickness = _settings.PenSize,
-                Fill = Brushes.Transparent,
+                Fill = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)), // Near-transparent but hittable
                 RadiusX = 4,
                 RadiusY = 4,
                 Effect = CreateShapeShadow()
@@ -578,7 +587,7 @@ public partial class OverlayWindow : Window
             {
                 Stroke = brush,
                 StrokeThickness = _settings.PenSize,
-                Fill = Brushes.Transparent,
+                Fill = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)), // Near-transparent but hittable
                 Effect = CreateShapeShadow()
             },
             _ => null
@@ -790,8 +799,34 @@ public partial class OverlayWindow : Window
 
     public void TriggerConfetti()
     {
-        _confettiService?.FullScreenBurst(ActualWidth, ActualHeight);
+        // Confetti needs the overlay to render - temporarily expand to full screen
+        bool wasDrawMode = _isDrawMode;
+        if (!_isDrawMode)
+        {
+            _isDrawMode = true;
+            Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
+        }
+        // Expand overlay to full virtual screen for confetti
+        Left = SystemParameters.VirtualScreenLeft;
+        Top = SystemParameters.VirtualScreenTop;
+        Width = SystemParameters.VirtualScreenWidth;
+        Height = SystemParameters.VirtualScreenHeight;
+
+        _confettiService?.FullScreenBurst(SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
         ShowModeIndicator("🎉");
+
+        // Auto-exit after confetti settles (3 seconds)
+        if (!wasDrawMode)
+        {
+            var exitTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            exitTimer.Tick += (_, _) =>
+            {
+                exitTimer.Stop();
+                if (_currentTool == AnnotationTool.None)
+                    ExitDrawMode();
+            };
+            exitTimer.Start();
+        }
     }
 
     // --- Text Size ---
