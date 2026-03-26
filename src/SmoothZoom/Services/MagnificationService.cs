@@ -41,7 +41,11 @@ public class MagnificationService : IDisposable
         visibleLeft = Math.Clamp(visibleLeft, monitorBounds.Left, monitorBounds.Right - viewW);
         visibleTop = Math.Clamp(visibleTop, monitorBounds.Top, monitorBounds.Bottom - viewH);
 
-        MagnificationApi.MagSetFullscreenTransform(scale, (int)visibleLeft, (int)visibleTop);
+        // Round to nearest pixel to reduce sub-pixel blur
+        int offsetX = (int)MathF.Round(visibleLeft);
+        int offsetY = (int)MathF.Round(visibleTop);
+
+        MagnificationApi.MagSetFullscreenTransform(scale, offsetX, offsetY);
     }
 
     public void Reset()

@@ -27,13 +27,16 @@ public class ZoomController : IDisposable
 
     // View lock
     private bool _viewLocked;
-    private float _lockedX;
-    private float _lockedY;
 
     // Configurable settings
     public float TargetZoomLevel { get; set; } = 2.0f;
     public int ZoomDurationMs { get; set; } = 300;
     public float CursorTrackingSpeed { get; set; } = 0.15f;
+
+    // Zoom adjustment limits
+    private const float MinZoom = 1.1f;
+    private const float MaxZoom = 6.0f;
+    private const float ZoomStep = 0.25f;
 
     public bool IsZoomed => _state != ZoomState.Idle;
 
@@ -57,16 +60,38 @@ public class ZoomController : IDisposable
             StartZoomOut();
     }
 
+    public void AdjustZoom(int direction)
+    {
+        // Only adjust while zoomed or zooming in
+        if (_state == ZoomState.Idle) return;
+
+        float newTarget = TargetZoomLevel + (direction * ZoomStep);
+        newTarget = Math.Clamp(newTarget, MinZoom, MaxZoom);
+        // Round to nearest 0.25 step
+        newTarget = MathF.Round(newTarget / ZoomStep) * ZoomStep;
+
+        TargetZoomLevel = newTarget;
+
+        // If fully zoomed, smoothly animate to the new level
+        if (_state == ZoomState.Zoomed)
+        {
+            _startScale = _currentScale;
+            _targetScale = newTarget;
+            _animationStart = DateTime.UtcNow;
+            _animationDuration = TimeSpan.FromMilliseconds(150); // Quick adjustment
+            _state = ZoomState.ZoomingIn;
+        }
+        else if (_state == ZoomState.ZoomingIn)
+        {
+            // Update target mid-animation
+            _targetScale = newTarget;
+        }
+    }
+
     public void ToggleViewLock()
     {
         if (_state == ZoomState.Idle) return;
-
         _viewLocked = !_viewLocked;
-        if (_viewLocked)
-        {
-            _lockedX = _smoothX;
-            _lockedY = _smoothY;
-        }
     }
 
     public void PanicReset()
@@ -81,7 +106,6 @@ public class ZoomController : IDisposable
 
     private void StartZoomIn()
     {
-        // Capture cursor position and monitor at the moment of activation
         User32.GetCursorPos(out var cursor);
         _activeMonitorBounds = MagnificationService.GetMonitorBounds(cursor.X, cursor.Y);
         _smoothX = cursor.X;
@@ -141,13 +165,29 @@ public class ZoomController : IDisposable
         User32.GetCursorPos(out var cursor);
         if (!_viewLocked)
         {
-            _smoothX += (cursor.X - _smoothX) * CursorTrackingSpeed;
-            _smoothY += (cursor.Y - _smoothY) * CursorTrackingSpeed;
-        }
-        // When locked, _smoothX/_smoothY stay at _lockedX/_lockedY
+            float dx = cursor.X - _smoothX;
+            float dy = cursor.Y - _smoothY;
+            float distance = MathF.Sqrt(dx * dx + dy * dy);
 
-        // 3. Apply transform
-        _magnification.SetZoom(_currentScale, (int)_smoothX, (int)_smoothY, _activeMonitorBounds);
+            // Adaptive tracking: snap to exact position when cursor is nearly still
+            // This eliminates sub-pixel jitter that causes blur
+            if (distance < 1.5f)
+            {
+                _smoothX = cursor.X;
+                _smoothY = cursor.Y;
+            }
+            else
+            {
+                _smoothX += dx * CursorTrackingSpeed;
+                _smoothY += dy * CursorTrackingSpeed;
+            }
+        }
+
+        // 3. Apply transform with rounded coordinates
+        _magnification.SetZoom(_currentScale,
+            (int)MathF.Round(_smoothX),
+            (int)MathF.Round(_smoothY),
+            _activeMonitorBounds);
     }
 
     private static float CubicEaseInOut(float t)

@@ -131,6 +131,7 @@ public partial class App : System.Windows.Application
         _keyboardHook.ToggleZoomPressed += () => _zoomController?.Toggle();
         _keyboardHook.PanicResetPressed += () => _zoomController?.PanicReset();
         _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
+        _keyboardHook.ScrollWheel += (direction) => _zoomController?.AdjustZoom(direction);
     }
 
     private void OnSettingsClicked(object? sender, EventArgs e)
