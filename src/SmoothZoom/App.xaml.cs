@@ -73,10 +73,12 @@ public partial class App : System.Windows.Application
     {
         AppDomain.CurrentDomain.UnhandledException += (_, _) =>
         {
+            _magnification?.Reset();
             MagnificationApi.MagSetFullscreenTransform(1.0f, 0, 0);
         };
         DispatcherUnhandledException += (_, _) =>
         {
+            _magnification?.Reset();
             MagnificationApi.MagSetFullscreenTransform(1.0f, 0, 0);
         };
     }
