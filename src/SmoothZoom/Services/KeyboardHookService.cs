@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Windows.Threading;
 using SmoothZoom.Native;
 
 namespace SmoothZoom.Services;
@@ -8,6 +8,7 @@ public class KeyboardHookService : IDisposable
 {
     private IntPtr _kbHookId = IntPtr.Zero;
     private IntPtr _mouseHookId = IntPtr.Zero;
+    private readonly DispatcherTimer _watchdog;
 
     // CRITICAL: Store delegates as class fields to prevent GC collection
     private readonly User32.LowLevelKeyboardProc _kbHookProc;
@@ -19,7 +20,7 @@ public class KeyboardHookService : IDisposable
     public event Action? ToggleZoomPressed;
     public event Action? PanicResetPressed;
     public event Action? ViewLockPressed;
-    public event Action<int>? ScrollWheel; // +1 = scroll up (zoom in), -1 = scroll down (zoom out)
+    public event Action<int>? ScrollWheel;
     public event Action? HighlightTogglePressed;
     public event Action? HelpTogglePressed;
 
@@ -27,22 +28,43 @@ public class KeyboardHookService : IDisposable
     {
         _kbHookProc = KeyboardHookCallback;
         _mouseHookProc = MouseHookCallback;
-        Install();
+        InstallHooks();
+
+        // Watchdog: reinstall hooks every 30 seconds to recover from Windows unhooking
+        _watchdog = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(30)
+        };
+        _watchdog.Tick += (_, _) => ReinstallHooks();
+        _watchdog.Start();
     }
 
-    private void Install()
+    private void InstallHooks()
     {
         var moduleHandle = Kernel32.GetModuleHandle(null);
 
-        _kbHookId = User32.SetWindowsHookEx(User32.WH_KEYBOARD_LL, _kbHookProc, moduleHandle, 0);
         if (_kbHookId == IntPtr.Zero)
-            throw new InvalidOperationException(
-                $"Failed to install keyboard hook. Error: {Marshal.GetLastWin32Error()}");
+        {
+            _kbHookId = User32.SetWindowsHookEx(User32.WH_KEYBOARD_LL, _kbHookProc, moduleHandle, 0);
+        }
 
-        _mouseHookId = User32.SetWindowsHookEx(User32.WH_MOUSE_LL, _mouseHookProc, moduleHandle, 0);
         if (_mouseHookId == IntPtr.Zero)
-            throw new InvalidOperationException(
-                $"Failed to install mouse hook. Error: {Marshal.GetLastWin32Error()}");
+        {
+            _mouseHookId = User32.SetWindowsHookEx(User32.WH_MOUSE_LL, _mouseHookProc, moduleHandle, 0);
+        }
+    }
+
+    private void ReinstallHooks()
+    {
+        // Unhook and re-hook to recover from Windows silently removing hooks
+        if (_kbHookId != IntPtr.Zero)
+            User32.UnhookWindowsHookEx(_kbHookId);
+        if (_mouseHookId != IntPtr.Zero)
+            User32.UnhookWindowsHookEx(_mouseHookId);
+
+        _kbHookId = IntPtr.Zero;
+        _mouseHookId = IntPtr.Zero;
+        InstallHooks();
     }
 
     private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -51,14 +73,13 @@ public class KeyboardHookService : IDisposable
         {
             var kbd = Marshal.PtrToStructure<User32.KBDLLHOOKSTRUCT>(lParam);
             bool isKeyDown = wParam == User32.WM_KEYDOWN || wParam == User32.WM_SYSKEYDOWN;
-            bool isKeyUp = wParam == User32.WM_KEYUP || wParam == User32.WM_SYSKEYUP;
 
             switch (kbd.vkCode)
             {
-                case 0xA2 or 0xA3: // VK_LCONTROL / VK_RCONTROL
+                case 0xA2 or 0xA3:
                     _ctrlPressed = isKeyDown;
                     break;
-                case 0xA4 or 0xA5: // VK_LMENU / VK_RMENU
+                case 0xA4 or 0xA5:
                     _altPressed = isKeyDown;
                     break;
             }
@@ -67,21 +88,11 @@ public class KeyboardHookService : IDisposable
             {
                 switch (kbd.vkCode)
                 {
-                    case 0x5A: // VK_Z
-                        ToggleZoomPressed?.Invoke();
-                        break;
-                    case 0x1B: // VK_ESCAPE
-                        PanicResetPressed?.Invoke();
-                        break;
-                    case 0x4C: // VK_L
-                        ViewLockPressed?.Invoke();
-                        break;
-                    case 0x48: // VK_H
-                        HighlightTogglePressed?.Invoke();
-                        break;
-                    case 0xBF: // VK_OEM_2 (/ key)
-                        HelpTogglePressed?.Invoke();
-                        break;
+                    case 0x5A: ToggleZoomPressed?.Invoke(); break;
+                    case 0x1B: PanicResetPressed?.Invoke(); break;
+                    case 0x4C: ViewLockPressed?.Invoke(); break;
+                    case 0x48: HighlightTogglePressed?.Invoke(); break;
+                    case 0xBF: HelpTogglePressed?.Invoke(); break;
                 }
             }
         }
@@ -94,10 +105,8 @@ public class KeyboardHookService : IDisposable
         if (nCode >= 0 && wParam == User32.WM_MOUSEWHEEL)
         {
             var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
-            // mouseData high word contains wheel delta (120 = one notch)
             int delta = (short)(mouse.mouseData >> 16);
 
-            // Check if Ctrl+Alt is held using async key state
             bool ctrlHeld = (User32.GetAsyncKeyState(User32.VK_CONTROL) & 0x8000) != 0;
             bool altHeld = (User32.GetAsyncKeyState(User32.VK_MENU) & 0x8000) != 0;
 
@@ -112,6 +121,7 @@ public class KeyboardHookService : IDisposable
 
     public void Dispose()
     {
+        _watchdog.Stop();
         if (_kbHookId != IntPtr.Zero)
         {
             User32.UnhookWindowsHookEx(_kbHookId);

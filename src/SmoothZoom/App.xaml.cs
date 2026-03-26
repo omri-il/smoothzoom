@@ -57,10 +57,16 @@ public partial class App : System.Windows.Application
 
     private void ApplySettings()
     {
-        if (_zoomController == null) return;
-        _zoomController.TargetZoomLevel = _settings.TargetZoomLevel;
-        _zoomController.ZoomDurationMs = _settings.ZoomDurationMs;
-        _zoomController.CursorTrackingSpeed = _settings.CursorTrackingSpeed;
+        if (_zoomController != null)
+        {
+            _zoomController.TargetZoomLevel = _settings.TargetZoomLevel;
+            _zoomController.ZoomDurationMs = _settings.ZoomDurationMs;
+            _zoomController.CursorTrackingSpeed = _settings.CursorTrackingSpeed;
+        }
+        if (_cursorHighlight != null)
+        {
+            _cursorHighlight.RingSize = _settings.HighlightRingSize;
+        }
     }
 
     private void SetupCrashRecovery()

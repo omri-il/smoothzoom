@@ -18,6 +18,7 @@ public partial class SettingsWindow : Window
         ZoomLevelSlider.Value = currentSettings.TargetZoomLevel;
         ZoomSpeedSlider.Value = currentSettings.ZoomDurationMs;
         TrackingSlider.Value = currentSettings.CursorTrackingSpeed;
+        RingSizeSlider.Value = currentSettings.HighlightRingSize;
         StartWithWindowsCheckBox.IsChecked = currentSettings.StartWithWindows;
     }
 
@@ -46,6 +47,12 @@ public partial class SettingsWindow : Window
         };
     }
 
+    private void RingSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (RingSizeLabel != null)
+            RingSizeLabel.Text = $"{(int)e.NewValue}px";
+    }
+
     private void SaveAndClose_Click(object sender, RoutedEventArgs e)
     {
         Settings = new AppSettings
@@ -53,6 +60,7 @@ public partial class SettingsWindow : Window
             TargetZoomLevel = (float)ZoomLevelSlider.Value,
             ZoomDurationMs = (int)ZoomSpeedSlider.Value,
             CursorTrackingSpeed = (float)TrackingSlider.Value,
+            HighlightRingSize = RingSizeSlider.Value,
             StartWithWindows = StartWithWindowsCheckBox.IsChecked ?? true
         };
         Saved = true;
