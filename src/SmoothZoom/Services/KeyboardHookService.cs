@@ -113,6 +113,8 @@ public class KeyboardHookService : IDisposable
             if (ctrlHeld && altHeld)
             {
                 ScrollWheel?.Invoke(delta > 0 ? 1 : -1);
+                // Swallow the event — don't pass to Windows (prevents folder zoom conflict)
+                return (IntPtr)1;
             }
         }
 

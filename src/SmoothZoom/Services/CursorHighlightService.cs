@@ -17,7 +17,7 @@ public class CursorHighlightService : IDisposable
     private MagnificationService? _magnificationService;
 
     // Configurable
-    public double RingSize { get; set; } = 50;
+    public double RingSize { get; set; } = 80;
     public double RingThickness { get; set; } = 3;
     public System.Windows.Media.Color RingColor { get; set; } =
         System.Windows.Media.Color.FromArgb(220, 65, 130, 220); // Blue

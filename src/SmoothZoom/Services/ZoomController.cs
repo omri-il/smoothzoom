@@ -72,16 +72,33 @@ public class ZoomController : IDisposable
     public void ScrollZoom(int direction)
     {
         float newTarget = _targetScale + (direction * ZoomStep);
-        newTarget = MathF.Round(newTarget / ZoomStep) * ZoomStep; // snap to grid
+        newTarget = MathF.Round(newTarget / ZoomStep) * ZoomStep;
         newTarget = Math.Clamp(newTarget, MinZoom, MaxZoom);
 
         if (newTarget <= 1.0f)
         {
-            // Scrolled all the way back — exit zoom
             AnimateTo(1.0f, ScrollAnimationMs);
             return;
         }
 
+        // If already zoomed/animating, just update the target — don't restart animation
+        if (_state == ZoomState.Zoomed || _state == ZoomState.Animating)
+        {
+            _targetScale = newTarget;
+            if (_state == ZoomState.Zoomed)
+            {
+                // Kick into animating mode with current scale as start
+                _startScale = _currentScale;
+                _animationStart = DateTime.UtcNow;
+                _animationDuration = TimeSpan.FromMilliseconds(ScrollAnimationMs);
+                _state = ZoomState.Animating;
+            }
+            // If already animating, just changing _targetScale is enough —
+            // the tick loop will interpolate toward the new target
+            return;
+        }
+
+        // First scroll from idle — full activation
         AnimateTo(newTarget, ScrollAnimationMs);
     }
 
