@@ -16,6 +16,7 @@ public partial class App : System.Windows.Application
     private KeyboardHookService? _keyboardHook;
     private MagnificationService? _magnification;
     private ZoomController? _zoomController;
+    private CursorHighlightService? _cursorHighlight;
     private AppSettings _settings = new();
 
     protected override void OnStartup(StartupEventArgs e)
@@ -46,6 +47,7 @@ public partial class App : System.Windows.Application
         }
 
         _zoomController = new ZoomController(_magnification, OnZoomStateChanged);
+        _cursorHighlight = new CursorHighlightService();
         ApplySettings();
 
         SetupTrayIcon();
@@ -132,6 +134,7 @@ public partial class App : System.Windows.Application
         _keyboardHook.PanicResetPressed += () => _zoomController?.PanicReset();
         _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
         _keyboardHook.ScrollWheel += (direction) => _zoomController?.AdjustZoom(direction);
+        _keyboardHook.HighlightTogglePressed += () => _cursorHighlight?.Toggle();
     }
 
     private void OnSettingsClicked(object? sender, EventArgs e)
@@ -155,6 +158,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _cursorHighlight?.Dispose();
         _zoomController?.Dispose();
         _magnification?.Dispose();
         if (_trayIcon != null)

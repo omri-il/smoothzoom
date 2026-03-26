@@ -20,6 +20,7 @@ public class KeyboardHookService : IDisposable
     public event Action? PanicResetPressed;
     public event Action? ViewLockPressed;
     public event Action<int>? ScrollWheel; // +1 = scroll up (zoom in), -1 = scroll down (zoom out)
+    public event Action? HighlightTogglePressed;
 
     public KeyboardHookService()
     {
@@ -73,6 +74,9 @@ public class KeyboardHookService : IDisposable
                         break;
                     case 0x4C: // VK_L
                         ViewLockPressed?.Invoke();
+                        break;
+                    case 0x48: // VK_H
+                        HighlightTogglePressed?.Invoke();
                         break;
                 }
             }
