@@ -60,6 +60,13 @@ public partial class ToolbarWindow : Window
             OverlayService.RaiseToTop(_hwnd);
     }
 
+    /// <summary>Returns screen-space bounds of the toolbar with padding for easy hovering.</summary>
+    public Rect GetScreenBounds()
+    {
+        const double pad = 10;
+        return new Rect(Left - pad, Top - pad, ActualWidth + pad * 2, ActualHeight + pad * 2);
+    }
+
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 1)

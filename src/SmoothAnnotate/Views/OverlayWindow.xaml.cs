@@ -17,12 +17,14 @@ public partial class OverlayWindow : Window
 {
     private IntPtr _hwnd;
     private bool _isDrawMode;
+    private bool _isOverToolbar; // tracks if overlay is currently click-through for toolbar
     private AnnotationTool _currentTool = AnnotationTool.None;
     private readonly AnnotationSettings _settings;
     private LaserService? _laserService;
     private StopwatchService? _stopwatchService;
     private ToastWindow? _toast;
     private ToolbarWindow? _toolbar;
+    private readonly System.Windows.Threading.DispatcherTimer _toolbarHitTimer;
 
     // Current drawing color
     private Color _currentColor;
@@ -71,6 +73,13 @@ public partial class OverlayWindow : Window
         _toolbar.ColorSelected += SetColor;
         _toolbar.ClearRequested += ClearAllStrokes;
         _toolbar.Show();
+
+        // Timer to detect when cursor is over toolbar and pass clicks through
+        _toolbarHitTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(50)
+        };
+        _toolbarHitTimer.Tick += OnToolbarHitCheck;
     }
 
     private void OnToolbarToolSelected(AnnotationTool tool)
@@ -231,6 +240,8 @@ public partial class OverlayWindow : Window
             DrawCanvas.DefaultDrawingAttributes = attrs;
             DrawCanvas.Cursor = CreateCircleCursor(_currentColor, attrs.Width);
         }
+        // Keep laser fade color in sync
+        _laserService?.SetBaseColor(_currentColor);
 
         string[] names = { "RED", "BLUE", "GREEN", "WHITE", "YELLOW" };
         ShowModeIndicator(names[index - 1]);
@@ -271,21 +282,45 @@ public partial class OverlayWindow : Window
         if (!_isDrawMode)
         {
             _isDrawMode = true;
-            // Set near-transparent background so WPF renders content
+            _isOverToolbar = false;
             Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
             OverlayService.RemoveClickThrough(_hwnd);
-            // Raise toolbar above overlay so it stays clickable
             _toolbar?.RaiseAboveOverlay();
+            _toolbarHitTimer.Start();
         }
     }
 
     private void ExitDrawMode()
     {
         _isDrawMode = false;
+        _isOverToolbar = false;
+        _toolbarHitTimer.Stop();
         SetTool(AnnotationTool.None);
-        // Fully transparent so SmoothZoom and other apps are unaffected
         Background = Brushes.Transparent;
         OverlayService.SetClickThrough(_hwnd);
+    }
+
+    private void OnToolbarHitCheck(object? sender, EventArgs e)
+    {
+        if (!_isDrawMode || _toolbar == null) return;
+
+        Native.User32.GetCursorPos(out var pt);
+        var toolbarBounds = _toolbar.GetScreenBounds();
+        bool cursorOverToolbar = toolbarBounds.Contains(pt.X, pt.Y);
+
+        if (cursorOverToolbar && !_isOverToolbar)
+        {
+            // Cursor entered toolbar area - let clicks pass through to toolbar
+            _isOverToolbar = true;
+            OverlayService.SetClickThrough(_hwnd);
+            _toolbar.RaiseAboveOverlay();
+        }
+        else if (!cursorOverToolbar && _isOverToolbar)
+        {
+            // Cursor left toolbar area - resume capturing for drawing
+            _isOverToolbar = false;
+            OverlayService.RemoveClickThrough(_hwnd);
+        }
     }
 
     private bool IsShapeTool(AnnotationTool tool) =>
@@ -375,6 +410,7 @@ public partial class OverlayWindow : Window
                     };
                     DrawCanvas.UseCustomCursor = true;
                     DrawCanvas.Cursor = CreateCircleCursor(_currentColor, _settings.LaserSize);
+                    _laserService?.SetBaseColor(_currentColor);
                     _laserService?.Start();
                     break;
             }
@@ -388,6 +424,24 @@ public partial class OverlayWindow : Window
         if (_currentTool == AnnotationTool.Laser)
         {
             _laserService?.RegisterStroke(e.Stroke);
+        }
+        else if (_currentTool == AnnotationTool.Pen)
+        {
+            // Add subtle shadow under pen strokes for a polished look
+            var shadowAttrs = new DrawingAttributes
+            {
+                Color = Color.FromArgb(40, 0, 0, 0),
+                Width = e.Stroke.DrawingAttributes.Width + 4,
+                Height = e.Stroke.DrawingAttributes.Height + 4,
+                FitToCurve = true,
+                StylusTip = StylusTip.Ellipse,
+                IgnorePressure = true
+            };
+            var shadow = new System.Windows.Ink.Stroke(e.Stroke.StylusPoints.Clone(), shadowAttrs);
+
+            int idx = DrawCanvas.Strokes.IndexOf(e.Stroke);
+            if (idx >= 0)
+                DrawCanvas.Strokes.Insert(idx, shadow);
         }
     }
 
