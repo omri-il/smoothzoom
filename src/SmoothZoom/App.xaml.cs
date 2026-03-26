@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Windows;
+using SmoothZoom.Native;
 using SmoothZoom.Services;
 using WinForms = System.Windows.Forms;
 using Drawing = System.Drawing;
@@ -11,10 +12,16 @@ public partial class App : System.Windows.Application
     private Mutex? _mutex;
     private WinForms.NotifyIcon? _trayIcon;
     private KeyboardHookService? _keyboardHook;
+    private MagnificationService? _magnification;
+    private bool _isZoomed;
+    private float _targetZoom = 2.0f;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Crash recovery: reset any stuck zoom from previous crash
+        SetupCrashRecovery();
 
         // Single-instance enforcement
         _mutex = new Mutex(true, "Global\\SmoothZoomMutex", out bool createdNew);
@@ -26,8 +33,29 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // Initialize magnification API
+        _magnification = new MagnificationService();
+        if (!_magnification.Initialize())
+        {
+            System.Windows.MessageBox.Show(
+                "Failed to initialize Magnification API.\nThe app may not work correctly.",
+                "SmoothZoom", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
         SetupTrayIcon();
         SetupKeyboardHook();
+    }
+
+    private void SetupCrashRecovery()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, _) =>
+        {
+            MagnificationApi.MagSetFullscreenTransform(1.0f, 0, 0);
+        };
+        DispatcherUnhandledException += (_, _) =>
+        {
+            MagnificationApi.MagSetFullscreenTransform(1.0f, 0, 0);
+        };
     }
 
     private void SetupTrayIcon()
@@ -39,43 +67,15 @@ public partial class App : System.Windows.Application
 
         _trayIcon = new WinForms.NotifyIcon
         {
-            Icon = CreateDefaultIcon(),
+            Icon = CreateIcon(false),
             Text = "SmoothZoom",
             Visible = true,
             ContextMenuStrip = contextMenu
         };
     }
 
-    private static Drawing.Icon CreateDefaultIcon()
+    private static Drawing.Icon CreateIcon(bool isZoomed)
     {
-        // Create a simple magnifying glass icon programmatically
-        var bitmap = new Drawing.Bitmap(32, 32);
-        using (var g = Drawing.Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Drawing.Color.Transparent);
-
-            // Draw magnifying glass circle
-            using var pen = new Drawing.Pen(Drawing.Color.FromArgb(70, 130, 220), 2.5f);
-            g.DrawEllipse(pen, 4, 4, 18, 18);
-
-            // Draw handle
-            using var handlePen = new Drawing.Pen(Drawing.Color.FromArgb(70, 130, 220), 3f);
-            g.DrawLine(handlePen, 19, 19, 27, 27);
-
-            // Draw "Z" in center
-            using var font = new Drawing.Font("Segoe UI", 7f, Drawing.FontStyle.Bold);
-            using var brush = new Drawing.SolidBrush(Drawing.Color.FromArgb(70, 130, 220));
-            g.DrawString("Z", font, brush, 7, 6);
-        }
-        var handle = bitmap.GetHicon();
-        return Drawing.Icon.FromHandle(handle);
-    }
-
-    public void SetTrayIconZoomed(bool isZoomed)
-    {
-        if (_trayIcon == null) return;
-
         var bitmap = new Drawing.Bitmap(32, 32);
         using (var g = Drawing.Graphics.FromImage(bitmap))
         {
@@ -83,8 +83,8 @@ public partial class App : System.Windows.Application
             g.Clear(Drawing.Color.Transparent);
 
             var color = isZoomed
-                ? Drawing.Color.FromArgb(255, 100, 80)   // Red when zoomed
-                : Drawing.Color.FromArgb(70, 130, 220);  // Blue when normal
+                ? Drawing.Color.FromArgb(255, 100, 80)
+                : Drawing.Color.FromArgb(70, 130, 220);
 
             using var pen = new Drawing.Pen(color, 2.5f);
             g.DrawEllipse(pen, 4, 4, 18, 18);
@@ -96,44 +96,70 @@ public partial class App : System.Windows.Application
             using var brush = new Drawing.SolidBrush(color);
             g.DrawString("Z", font, brush, 7, 6);
         }
-        var handle = bitmap.GetHicon();
-        _trayIcon.Icon = Drawing.Icon.FromHandle(handle);
-        _trayIcon.Text = isZoomed ? "SmoothZoom (Zoomed)" : "SmoothZoom";
+        return Drawing.Icon.FromHandle(bitmap.GetHicon());
+    }
+
+    private void UpdateTrayIcon()
+    {
+        if (_trayIcon == null) return;
+        _trayIcon.Icon = CreateIcon(_isZoomed);
+        _trayIcon.Text = _isZoomed ? "SmoothZoom (Zoomed)" : "SmoothZoom";
     }
 
     private void SetupKeyboardHook()
     {
         _keyboardHook = new KeyboardHookService();
-        _keyboardHook.ToggleZoomPressed += () =>
-        {
-            // Will be wired to ZoomController in Phase 3
-            System.Diagnostics.Debug.WriteLine("SmoothZoom: Toggle zoom pressed (Ctrl+Alt+Z)");
-        };
-        _keyboardHook.PanicResetPressed += () =>
-        {
-            System.Diagnostics.Debug.WriteLine("SmoothZoom: Panic reset pressed (Ctrl+Alt+Esc)");
-        };
+        _keyboardHook.ToggleZoomPressed += OnToggleZoom;
+        _keyboardHook.PanicResetPressed += OnPanicReset;
         _keyboardHook.ViewLockPressed += () =>
         {
             System.Diagnostics.Debug.WriteLine("SmoothZoom: View lock pressed (Ctrl+Alt+L)");
         };
     }
 
+    private void OnToggleZoom()
+    {
+        if (_magnification == null) return;
+
+        if (!_isZoomed)
+        {
+            // Zoom in: get cursor position and monitor bounds
+            User32.GetCursorPos(out var cursor);
+            var bounds = MagnificationService.GetMonitorBounds(cursor.X, cursor.Y);
+            _magnification.SetZoom(_targetZoom, cursor.X, cursor.Y, bounds);
+            _isZoomed = true;
+        }
+        else
+        {
+            // Zoom out
+            _magnification.Reset();
+            _isZoomed = false;
+        }
+        UpdateTrayIcon();
+    }
+
+    private void OnPanicReset()
+    {
+        _magnification?.Reset();
+        _isZoomed = false;
+        UpdateTrayIcon();
+    }
+
     private void OnSettingsClicked(object? sender, EventArgs e)
     {
-        // Will be implemented in Phase 5
         System.Windows.MessageBox.Show("Settings coming soon!", "SmoothZoom",
             MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void OnQuitClicked(object? sender, EventArgs e)
     {
-        // TODO: Reset magnification before quitting (Phase 3)
+        _magnification?.Reset();
         Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _magnification?.Dispose();
         if (_trayIcon != null)
         {
             _trayIcon.Visible = false;
