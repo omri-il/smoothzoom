@@ -107,14 +107,14 @@ public class ZoomController : IDisposable
 
     /// <summary>
     /// Middle-click drag to pan the viewport. Works even in locked mode.
-    /// Delta is in screen pixels — we move the viewport in the opposite direction.
+    /// Content follows the cursor 1:1 — like grabbing and dragging a map.
     /// </summary>
     public void DragPan(int deltaX, int deltaY)
     {
         if (_state == ZoomState.Idle) return;
-        // Move viewport opposite to drag direction (like dragging a map)
-        _smoothX -= deltaX;
-        _smoothY -= deltaY;
+        // Move viewport WITH the cursor so content sticks to the grab point
+        _smoothX += deltaX;
+        _smoothY += deltaY;
     }
 
     public void PanicReset()
