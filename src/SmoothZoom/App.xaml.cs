@@ -1,7 +1,9 @@
 using System.Threading;
 using System.Windows;
+using SmoothZoom.Models;
 using SmoothZoom.Native;
 using SmoothZoom.Services;
+using SmoothZoom.Views;
 using WinForms = System.Windows.Forms;
 using Drawing = System.Drawing;
 
@@ -14,6 +16,7 @@ public partial class App : System.Windows.Application
     private KeyboardHookService? _keyboardHook;
     private MagnificationService? _magnification;
     private ZoomController? _zoomController;
+    private AppSettings _settings = new();
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -30,6 +33,10 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // Load settings
+        _settings = SettingsService.Load();
+
+        // Initialize magnification API
         _magnification = new MagnificationService();
         if (!_magnification.Initialize())
         {
@@ -39,9 +46,18 @@ public partial class App : System.Windows.Application
         }
 
         _zoomController = new ZoomController(_magnification, OnZoomStateChanged);
+        ApplySettings();
 
         SetupTrayIcon();
         SetupKeyboardHook();
+    }
+
+    private void ApplySettings()
+    {
+        if (_zoomController == null) return;
+        _zoomController.TargetZoomLevel = _settings.TargetZoomLevel;
+        _zoomController.ZoomDurationMs = _settings.ZoomDurationMs;
+        _zoomController.CursorTrackingSpeed = _settings.CursorTrackingSpeed;
     }
 
     private void SetupCrashRecovery()
@@ -119,8 +135,15 @@ public partial class App : System.Windows.Application
 
     private void OnSettingsClicked(object? sender, EventArgs e)
     {
-        System.Windows.MessageBox.Show("Settings coming soon!", "SmoothZoom",
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        var window = new SettingsWindow(_settings);
+        window.ShowDialog();
+
+        if (window.Saved)
+        {
+            _settings = window.Settings;
+            SettingsService.Save(_settings);
+            ApplySettings();
+        }
     }
 
     private void OnQuitClicked(object? sender, EventArgs e)
