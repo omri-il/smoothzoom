@@ -81,20 +81,14 @@ public class ZoomController : IDisposable
             return;
         }
 
-        // If already zoomed/animating, just update the target — don't restart animation
+        // If already zoomed/animating, smoothly transition from current position
         if (_state == ZoomState.Zoomed || _state == ZoomState.Animating)
         {
+            _startScale = _currentScale; // Always start from where we are NOW
             _targetScale = newTarget;
-            if (_state == ZoomState.Zoomed)
-            {
-                // Kick into animating mode with current scale as start
-                _startScale = _currentScale;
-                _animationStart = DateTime.UtcNow;
-                _animationDuration = TimeSpan.FromMilliseconds(ScrollAnimationMs);
-                _state = ZoomState.Animating;
-            }
-            // If already animating, just changing _targetScale is enough —
-            // the tick loop will interpolate toward the new target
+            _animationStart = DateTime.UtcNow;
+            _animationDuration = TimeSpan.FromMilliseconds(ScrollAnimationMs);
+            _state = ZoomState.Animating;
             return;
         }
 

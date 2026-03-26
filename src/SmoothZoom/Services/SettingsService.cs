@@ -24,7 +24,11 @@ public static class SettingsService
             if (File.Exists(SettingsFile))
             {
                 var json = File.ReadAllText(SettingsFile);
-                return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+                var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+                // Reset to defaults if settings are from an older version
+                if (settings.Version < 2)
+                    return new AppSettings();
+                return settings;
             }
         }
         catch

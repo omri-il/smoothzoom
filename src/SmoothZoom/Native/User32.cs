@@ -61,6 +61,10 @@ public static class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool InvalidateRect(IntPtr hwnd, IntPtr lpRect, bool bErase);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindow(IntPtr hwnd);
+
     // Hook constants
     public const int WH_KEYBOARD_LL = 13;
     public const int WH_MOUSE_LL = 14;

@@ -43,7 +43,7 @@
         </TextBlock>
         <Slider x:Name="TrackingSlider" Minimum="0.05" Maximum="0.5"
                 TickFrequency="0.05" IsSnapToTickEnabled="True"
-                Value="0.15" ValueChanged="TrackingSlider_ValueChanged"/>
+                Value="0.25" ValueChanged="TrackingSlider_ValueChanged"/>
 
         <TextBlock>
             <Run Text="Cursor Ring Size: "/>
@@ -51,7 +51,7 @@
         </TextBlock>
         <Slider x:Name="RingSizeSlider" Minimum="20" Maximum="120"
                 TickFrequency="5" IsSnapToTickEnabled="True"
-                Value="40" ValueChanged="RingSizeSlider_ValueChanged"/>
+                Value="80" ValueChanged="RingSizeSlider_ValueChanged"/>
 
         <TextBlock Text="Ring Color:" Margin="0,0,0,4"/>
         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">

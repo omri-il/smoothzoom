@@ -14,17 +14,13 @@ public class MagnificationService : IDisposable
     private User32.RECT _currentMonitorBounds;
     private bool _windowsCreated;
     private float _lastScale;
+    private User32.RECT _lastSourceRect;
     private readonly List<IntPtr> _excludeWindows = new();
 
-    /// <summary>
-    /// Add a window handle to exclude from magnification (e.g., cursor highlight overlay).
-    /// Must be called before zoom is activated.
-    /// </summary>
     public void ExcludeWindow(IntPtr hwnd)
     {
         if (!_excludeWindows.Contains(hwnd))
             _excludeWindows.Add(hwnd);
-        // If already zoomed, update the filter list immediately
         if (_magnifierHwnd != IntPtr.Zero)
             UpdateFilterList();
     }
@@ -40,10 +36,7 @@ public class MagnificationService : IDisposable
     {
         _initialized = MagnificationApi.MagInitialize();
         if (_initialized)
-        {
-            // Reset any leftover fullscreen zoom from a previous crash
             MagnificationApi.MagSetFullscreenTransform(1.0f, 0, 0);
-        }
         return _initialized;
     }
 
@@ -60,6 +53,7 @@ public class MagnificationService : IDisposable
         {
             DestroyMagnifierWindows();
             CreateMagnifierWindows(monitorBounds);
+            if (!_windowsCreated) return; // Creation failed
         }
 
         // Update transform only when scale changes
@@ -70,7 +64,7 @@ public class MagnificationService : IDisposable
             _lastScale = scale;
         }
 
-        // Calculate source rectangle (what area of the screen to magnify)
+        // Calculate source rectangle
         int monW = monitorBounds.Right - monitorBounds.Left;
         int monH = monitorBounds.Bottom - monitorBounds.Top;
         float viewW = monW / scale;
@@ -82,7 +76,6 @@ public class MagnificationService : IDisposable
         float visibleLeft = cursorX - relX * viewW;
         float visibleTop = cursorY - relY * viewH;
 
-        // Edge clamping
         visibleLeft = Math.Clamp(visibleLeft, monitorBounds.Left, monitorBounds.Right - viewW);
         visibleTop = Math.Clamp(visibleTop, monitorBounds.Top, monitorBounds.Bottom - viewH);
 
@@ -95,14 +88,18 @@ public class MagnificationService : IDisposable
         };
 
         MagnificationApi.MagSetWindowSource(_magnifierHwnd, sourceRect);
-        // InvalidateRect with bErase=false — just repaint without erasing background
-        User32.InvalidateRect(_magnifierHwnd, IntPtr.Zero, false);
+
+        // Only invalidate when source rect actually changed (reduces flicker)
+        if (!RectEqual(sourceRect, _lastSourceRect))
+        {
+            User32.InvalidateRect(_magnifierHwnd, IntPtr.Zero, false);
+            _lastSourceRect = sourceRect;
+        }
     }
 
     public void Reset()
     {
         DestroyMagnifierWindows();
-        // Belt-and-suspenders: also reset fullscreen in case of crash recovery
         MagnificationApi.MagSetFullscreenTransform(1.0f, 0, 0);
     }
 
@@ -112,7 +109,6 @@ public class MagnificationService : IDisposable
         int monW = monitorBounds.Right - monitorBounds.Left;
         int monH = monitorBounds.Bottom - monitorBounds.Top;
 
-        // Create WinForms host (borderless, topmost, click-through)
         _hostForm = new MagnifierHostForm
         {
             FormBorderStyle = WinForms.FormBorderStyle.None,
@@ -124,14 +120,12 @@ public class MagnificationService : IDisposable
         };
         _hostForm.Show();
 
-        // Make click-through
         IntPtr hostHwnd = _hostForm.Handle;
         int exStyle = User32.GetWindowLong(hostHwnd, User32.GWL_EXSTYLE);
         User32.SetWindowLong(hostHwnd, User32.GWL_EXSTYLE,
             exStyle | (int)(User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT
                           | User32.WS_EX_TOOLWINDOW | User32.WS_EX_NOACTIVATE));
 
-        // Create magnifier child window
         _magnifierHwnd = User32.CreateWindowEx(0,
             User32.WC_MAGNIFIER, "MagnifierChild",
             User32.WS_CHILD | User32.WS_VISIBLE,
@@ -140,16 +134,15 @@ public class MagnificationService : IDisposable
 
         if (_magnifierHwnd == IntPtr.Zero)
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"Failed to create Magnifier window. Error: {Marshal.GetLastWin32Error()}");
             DestroyMagnifierWindows();
             return;
         }
 
-        // Exclude host form + any registered overlay windows from magnification
+        // Exclude host + overlays from magnification
         UpdateFilterList();
 
-        _lastScale = 0; // Force transform update on next SetZoom
+        _lastScale = 0;
+        _lastSourceRect = default;
         _windowsCreated = true;
     }
 
@@ -162,21 +155,29 @@ public class MagnificationService : IDisposable
         }
         if (_hostForm != null)
         {
+            _hostForm.Hide(); // Hide first to avoid visible close flash
             _hostForm.Close();
             _hostForm.Dispose();
             _hostForm = null;
         }
         _windowsCreated = false;
         _lastScale = 0;
+        _lastSourceRect = default;
     }
 
     private void UpdateFilterList()
     {
         if (_magnifierHwnd == IntPtr.Zero || _hostForm == null) return;
 
-        // Build list: host form + all registered exclude windows
+        // Build list: host form + valid exclude windows
         var handles = new List<IntPtr> { _hostForm.Handle };
-        handles.AddRange(_excludeWindows);
+        foreach (var hwnd in _excludeWindows)
+        {
+            if (User32.IsWindow(hwnd))
+                handles.Add(hwnd);
+        }
+        // Clean up stale handles
+        _excludeWindows.RemoveAll(h => !User32.IsWindow(h));
 
         IntPtr filterList = Marshal.AllocHGlobal(IntPtr.Size * handles.Count);
         for (int i = 0; i < handles.Count; i++)
@@ -188,6 +189,9 @@ public class MagnificationService : IDisposable
     }
 
     private static bool BoundsEqual(User32.RECT a, User32.RECT b) =>
+        a.Left == b.Left && a.Top == b.Top && a.Right == b.Right && a.Bottom == b.Bottom;
+
+    private static bool RectEqual(User32.RECT a, User32.RECT b) =>
         a.Left == b.Left && a.Top == b.Top && a.Right == b.Right && a.Bottom == b.Bottom;
 
     public static User32.RECT GetMonitorBounds(int cursorX, int cursorY)
@@ -210,10 +214,6 @@ public class MagnificationService : IDisposable
     }
 }
 
-/// <summary>
-/// Custom Form that returns HTTRANSPARENT for all hit-test messages,
-/// ensuring all mouse events pass through to windows beneath.
-/// </summary>
 internal class MagnifierHostForm : WinForms.Form
 {
     private const int WM_NCHITTEST = 0x0084;
