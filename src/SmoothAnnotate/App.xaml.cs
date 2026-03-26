@@ -152,6 +152,12 @@ public partial class App : System.Windows.Application
 
         // Color picker
         _keyboardHook.ColorChanged += (idx) => Dispatcher.Invoke(() => _overlayWindow?.SetColor(idx));
+
+        // Ctrl+1-8 tool shortcuts, Ctrl+0 = mouse
+        _keyboardHook.ToolShortcut += (num) => Dispatcher.Invoke(() => _overlayWindow?.SelectToolByNumber(num));
+
+        // Ctrl+V = paste image from clipboard onto overlay
+        _keyboardHook.ClipboardPaste += () => Dispatcher.Invoke(() => _overlayWindow?.PasteImageFromClipboard());
     }
 
     private void OnQuitClicked(object? sender, EventArgs e)

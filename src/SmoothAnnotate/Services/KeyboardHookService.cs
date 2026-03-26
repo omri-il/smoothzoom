@@ -29,6 +29,12 @@ public class KeyboardHookService : IDisposable
     // Color picker (1-5)
     public event Action<int>? ColorChanged;
 
+    // Tool number shortcuts (Ctrl+1 through Ctrl+8, Ctrl+0 = mouse)
+    public event Action<int>? ToolShortcut;
+
+    // Clipboard paste
+    public event Action? ClipboardPaste;
+
     public KeyboardHookService()
     {
         _kbHookProc = KeyboardHookCallback;
@@ -89,6 +95,24 @@ public class KeyboardHookService : IDisposable
                         App.Log("F12 pressed -> TimerToggled");
                         TimerToggled?.Invoke();
                         break;
+                }
+
+                // Ctrl+number shortcuts for tools (Ctrl only, no Alt)
+                if (_ctrlPressed && !_altPressed)
+                {
+                    switch (kbd.vkCode)
+                    {
+                        case 0x31: ToolShortcut?.Invoke(1); break; // Ctrl+1 = Pen
+                        case 0x32: ToolShortcut?.Invoke(2); break; // Ctrl+2 = Highlighter
+                        case 0x33: ToolShortcut?.Invoke(3); break; // Ctrl+3 = Laser
+                        case 0x34: ToolShortcut?.Invoke(4); break; // Ctrl+4 = Eraser
+                        case 0x35: ToolShortcut?.Invoke(5); break; // Ctrl+5 = Arrow
+                        case 0x36: ToolShortcut?.Invoke(6); break; // Ctrl+6 = Rectangle
+                        case 0x37: ToolShortcut?.Invoke(7); break; // Ctrl+7 = Circle
+                        case 0x38: ToolShortcut?.Invoke(8); break; // Ctrl+8 = Text
+                        case 0x30: ToolShortcut?.Invoke(0); break; // Ctrl+0 = Mouse/Pointer
+                        case 0x56: ClipboardPaste?.Invoke(); break; // Ctrl+V = Paste image
+                    }
                 }
 
                 // Ctrl+Alt hotkeys for less frequent tools

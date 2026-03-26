@@ -26,7 +26,7 @@ public partial class ToastWindow : Window
         var screen = SystemParameters.WorkArea;
         UpdateLayout();
         Left = screen.Left + (screen.Width - ActualWidth) / 2;
-        Top = screen.Top + 50;
+        Top = screen.Top + 72;  // below the horizontal toolbar (~48px tall + 10px margin + buffer)
 
         ToastBorder.Opacity = 1.0;
 

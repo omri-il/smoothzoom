@@ -37,7 +37,11 @@ public partial class OverlayWindow : Window
 
     // Select/Move state
     private UIElement? _draggedElement;
-    private Point _dragOffset;
+    private Point _dragStartPoint;
+    private Point _dragLastPoint;
+
+    // Arrow pairs: Line ↔ Polygon (arrowhead) — move both together
+    private readonly Dictionary<UIElement, UIElement> _arrowPairs = new();
 
     // Text tool state
     private TextBox? _activeTextBox;
@@ -105,10 +109,12 @@ public partial class OverlayWindow : Window
         if (tool == AnnotationTool.None)
         {
             ExitDrawMode();
-            ShowModeIndicator("CLICK-THROUGH");
+            _toolbar?.CollapseToMinimal();
+            ShowModeIndicator("MOUSE");
         }
         else
         {
+            _toolbar?.ExpandFromMinimal();
             EnterDrawMode();
             SetTool(tool);
             ShowModeIndicator(tool.ToString().ToUpper());
@@ -162,6 +168,66 @@ public partial class OverlayWindow : Window
                 ShowModeIndicator("CLICK-THROUGH");
                 break;
         }
+    }
+
+    // --- Tool Number Shortcuts (Ctrl+0-8) ---
+
+    public void SelectToolByNumber(int num)
+    {
+        var tool = num switch
+        {
+            0 => AnnotationTool.None,
+            1 => AnnotationTool.Pen,
+            2 => AnnotationTool.Highlighter,
+            3 => AnnotationTool.Laser,
+            4 => AnnotationTool.Eraser,
+            5 => AnnotationTool.Arrow,
+            6 => AnnotationTool.Rectangle,
+            7 => AnnotationTool.Circle,
+            8 => AnnotationTool.Text,
+            _ => _currentTool
+        };
+        OnToolbarToolSelected(tool);
+    }
+
+    // --- Paste image from clipboard ---
+
+    public void PasteImageFromClipboard()
+    {
+        if (!System.Windows.Clipboard.ContainsImage()) return;
+
+        var bmp = System.Windows.Clipboard.GetImage();
+        if (bmp == null) return;
+
+        // Enter draw mode so the overlay is visible/interactive
+        if (!_isDrawMode)
+        {
+            _toolbar?.ExpandFromMinimal();
+            EnterDrawMode();
+            SetTool(AnnotationTool.Select);
+        }
+
+        // Place image at screen center
+        double screenW = ActualWidth;
+        double screenH = ActualHeight;
+        double imgW = Math.Min(bmp.PixelWidth, screenW * 0.6);
+        double imgH = bmp.PixelHeight * (imgW / bmp.PixelWidth);
+
+        var img = new System.Windows.Controls.Image
+        {
+            Source = bmp,
+            Width = imgW,
+            Height = imgH,
+            IsHitTestVisible = true
+        };
+
+        double left = (screenW - imgW) / 2;
+        double top = (screenH - imgH) / 2;
+        Canvas.SetLeft(img, left);
+        Canvas.SetTop(img, top);
+        ShapeCanvas.Children.Add(img);
+
+        ShowModeIndicator("IMAGE PASTED");
     }
 
     // --- Shape Tool Toggles ---
@@ -287,6 +353,7 @@ public partial class OverlayWindow : Window
     {
         DrawCanvas.Strokes.Clear();
         ShapeCanvas.Children.Clear();
+        _arrowPairs.Clear();
         _laserService?.ClearTracking();
         _shapePreview = null;
         _isDrawingShape = false;
@@ -317,11 +384,7 @@ public partial class OverlayWindow : Window
         SetTool(AnnotationTool.None);
         Background = Brushes.Transparent;
         OverlayService.SetClickThrough(_hwnd);
-        // Expand back to full virtual screen for click-through mode
-        Left = SystemParameters.VirtualScreenLeft;
-        Top = SystemParameters.VirtualScreenTop;
-        Width = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight;
+        // Stay on current monitor so annotations remain visible and positioned correctly
     }
 
     private void RepositionToCurrentMonitor()
@@ -521,30 +584,34 @@ public partial class OverlayWindow : Window
         if (_currentTool == AnnotationTool.Select)
         {
             var pos = e.GetPosition(ShapeCanvas);
-            var hit = ShapeCanvas.InputHitTest(pos) as UIElement;
-            if (hit != null && hit != ShapeCanvas)
-            {
-                // Walk up to find the direct child of ShapeCanvas
-                var element = hit;
-                while (element != null && VisualTreeHelper.GetParent(element) as Canvas != ShapeCanvas)
-                    element = VisualTreeHelper.GetParent(element) as UIElement;
 
-                if (element != null)
+            // Find the closest shape within a generous hit radius
+            UIElement? bestElement = null;
+            double bestDist = 15; // max hit distance in pixels
+
+            foreach (UIElement child in ShapeCanvas.Children)
+            {
+                if (child is TextBox) continue; // skip active text boxes
+                double dist = GetDistanceToElement(child, pos);
+                if (dist < bestDist)
                 {
-                    _draggedElement = element;
-                    double left = Canvas.GetLeft(element);
-                    double top = Canvas.GetTop(element);
-                    if (double.IsNaN(left)) left = 0;
-                    if (double.IsNaN(top)) top = 0;
-                    _dragOffset = new Point(pos.X - left, pos.Y - top);
-                    ShapeCanvas.CaptureMouse();
-                    e.Handled = true;
-                    return;
+                    bestDist = dist;
+                    bestElement = child;
                 }
             }
+
+            if (bestElement != null)
+            {
+                _draggedElement = bestElement;
+                _dragStartPoint = pos;
+                _dragLastPoint = pos;
+                ShapeCanvas.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
             // No shape hit - temporarily disable ShapeCanvas so InkCanvas Select mode works
             ShapeCanvas.IsHitTestVisible = false;
-            // Re-enable after a short delay so next click works
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_currentTool == AnnotationTool.Select)
@@ -611,8 +678,13 @@ public partial class OverlayWindow : Window
         if (_draggedElement != null)
         {
             var pos = e.GetPosition(ShapeCanvas);
-            Canvas.SetLeft(_draggedElement, pos.X - _dragOffset.X);
-            Canvas.SetTop(_draggedElement, pos.Y - _dragOffset.Y);
+            double dx = pos.X - _dragLastPoint.X;
+            double dy = pos.Y - _dragLastPoint.Y;
+            MoveElement(_draggedElement, dx, dy);
+            // If this is part of an arrow pair (Line + arrowhead), move the partner too
+            if (_arrowPairs.TryGetValue(_draggedElement, out var partner))
+                MoveElement(partner, dx, dy);
+            _dragLastPoint = pos;
             return;
         }
 
@@ -679,10 +751,10 @@ public partial class OverlayWindow : Window
         double length = Math.Sqrt(dx * dx + dy * dy);
         if (length < 5) return;
 
-        // Bigger head, sharper point (0.22 rad ≈ 12.6° for a crisp arrow)
-        double headSize = Math.Max(20, _settings.PenSize * 6);
+        // Large prominent arrowhead (0.35 rad ≈ 20° spread, scaled to arrow length)
+        double headSize = Math.Max(30, Math.Min(length * 0.35, 50));
         double angle = Math.Atan2(dy, dx);
-        double spread = 0.22;
+        double spread = 0.35;
 
         var tip = new Point(line.X2, line.Y2);
         var p1 = new Point(
@@ -700,6 +772,88 @@ public partial class OverlayWindow : Window
             Effect = CreateShapeShadow()
         };
         ShapeCanvas.Children.Add(arrowHead);
+
+        // Register bidirectional pair so Select tool moves both together
+        _arrowPairs[line] = arrowHead;
+        _arrowPairs[arrowHead] = line;
+    }
+
+    private static void MoveElement(UIElement el, double dx, double dy)
+    {
+        if (el is Line line)
+        {
+            line.X1 += dx; line.Y1 += dy;
+            line.X2 += dx; line.Y2 += dy;
+        }
+        else if (el is Polygon poly)
+        {
+            var pts = new PointCollection();
+            foreach (var p in poly.Points)
+                pts.Add(new Point(p.X + dx, p.Y + dy));
+            poly.Points = pts;
+        }
+        else
+        {
+            double left = Canvas.GetLeft(el);
+            double top = Canvas.GetTop(el);
+            if (double.IsNaN(left)) left = 0;
+            if (double.IsNaN(top)) top = 0;
+            Canvas.SetLeft(el, left + dx);
+            Canvas.SetTop(el, top + dy);
+        }
+    }
+
+    private static double GetDistanceToElement(UIElement el, Point pos)
+    {
+        if (el is Line line)
+        {
+            return DistanceToLineSegment(pos, new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
+        }
+        else if (el is Polygon poly && poly.Points.Count > 0)
+        {
+            // Check distance to polygon edges + interior
+            var bounds = new Rect(
+                poly.Points.Min(p => p.X), poly.Points.Min(p => p.Y),
+                poly.Points.Max(p => p.X) - poly.Points.Min(p => p.X),
+                poly.Points.Max(p => p.Y) - poly.Points.Min(p => p.Y));
+            if (bounds.Contains(pos)) return 0;
+            double min = double.MaxValue;
+            for (int i = 0; i < poly.Points.Count; i++)
+            {
+                var a = poly.Points[i];
+                var b = poly.Points[(i + 1) % poly.Points.Count];
+                min = Math.Min(min, DistanceToLineSegment(pos, a, b));
+            }
+            return min;
+        }
+        else
+        {
+            double left = Canvas.GetLeft(el);
+            double top = Canvas.GetTop(el);
+            if (double.IsNaN(left)) left = 0;
+            if (double.IsNaN(top)) top = 0;
+            var fe = el as FrameworkElement;
+            double w = fe?.Width ?? fe?.ActualWidth ?? 0;
+            double h = fe?.Height ?? fe?.ActualHeight ?? 0;
+            if (double.IsNaN(w)) w = fe?.ActualWidth ?? 0;
+            if (double.IsNaN(h)) h = fe?.ActualHeight ?? 0;
+            var bounds = new Rect(left, top, Math.Max(w, 1), Math.Max(h, 1));
+            if (bounds.Contains(pos)) return 0;
+            // Distance to nearest edge
+            double cx = Math.Max(bounds.Left, Math.Min(pos.X, bounds.Right));
+            double cy = Math.Max(bounds.Top, Math.Min(pos.Y, bounds.Bottom));
+            return Math.Sqrt((pos.X - cx) * (pos.X - cx) + (pos.Y - cy) * (pos.Y - cy));
+        }
+    }
+
+    private static double DistanceToLineSegment(Point p, Point a, Point b)
+    {
+        double dx = b.X - a.X, dy = b.Y - a.Y;
+        double lenSq = dx * dx + dy * dy;
+        if (lenSq < 0.001) return Math.Sqrt((p.X - a.X) * (p.X - a.X) + (p.Y - a.Y) * (p.Y - a.Y));
+        double t = Math.Clamp(((p.X - a.X) * dx + (p.Y - a.Y) * dy) / lenSq, 0, 1);
+        double projX = a.X + t * dx, projY = a.Y + t * dy;
+        return Math.Sqrt((p.X - projX) * (p.X - projX) + (p.Y - projY) * (p.Y - projY));
     }
 
     private static System.Windows.Media.Effects.DropShadowEffect CreateShapeShadow()
@@ -799,20 +953,18 @@ public partial class OverlayWindow : Window
 
     public void TriggerConfetti()
     {
-        // Confetti needs the overlay to render - temporarily expand to full screen
+        // Confetti needs the overlay to render
         bool wasDrawMode = _isDrawMode;
         if (!_isDrawMode)
         {
             _isDrawMode = true;
+            RepositionToCurrentMonitor();
             Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
+            OverlayService.RemoveClickThrough(_hwnd);
         }
-        // Expand overlay to full virtual screen for confetti
-        Left = SystemParameters.VirtualScreenLeft;
-        Top = SystemParameters.VirtualScreenTop;
-        Width = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight;
 
-        _confettiService?.FullScreenBurst(SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        // Use the current overlay size (single monitor), not virtual screen
+        _confettiService?.FullScreenBurst(ActualWidth, ActualHeight);
         ShowModeIndicator("🎉");
 
         // Auto-exit after confetti settles (3 seconds)

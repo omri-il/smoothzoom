@@ -10,250 +10,288 @@
         ResizeMode="NoResize"
         SizeToContent="WidthAndHeight">
 
-    <Border x:Name="MainBorder" CornerRadius="14"
-            MouseLeftButtonDown="Border_MouseLeftButtonDown">
-        <Border.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                <GradientStop Color="#F0141420" Offset="0"/>
-                <GradientStop Color="#F01A1A2E" Offset="1"/>
-            </LinearGradientBrush>
-        </Border.Background>
-        <Border.Effect>
-            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="4" Opacity="0.5"/>
-        </Border.Effect>
-
-        <StackPanel Margin="8,10,8,8">
-            <!-- Header with close button -->
-            <Grid Margin="0,0,0,8">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Ellipse Width="8" Height="8" Fill="#FF4060" Margin="0,0,4,0"/>
-                    <TextBlock Text="ANNOTATE"
-                               FontSize="10"
-                               FontFamily="Segoe UI"
-                               FontWeight="Bold"
-                               Foreground="#60FFFFFF"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-                <Border HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Width="18" Height="18" CornerRadius="9"
-                        Background="Transparent" Cursor="Hand"
-                        MouseLeftButtonDown="CloseButton_Click"
-                        Margin="0,-2,-2,0">
-                    <TextBlock Text="✕" FontSize="10" Foreground="#60FFFFFF"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
-            </Grid>
-
-            <!-- Select/Move Tool -->
-            <Button x:Name="BtnSelect" Tag="Select" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="⇱" FontSize="14" Foreground="#80FFFFFF"
-                               Width="14" TextAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Text="Select" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <!-- Drawing Tools Section -->
-            <Border Height="1" Background="#15FFFFFF" Margin="6,4"/>
-            <TextBlock Text="DRAW" FontSize="8" Foreground="#40FFFFFF"
-                       FontFamily="Segoe UI" FontWeight="Bold" Margin="10,0,0,3"/>
-
-            <Button x:Name="BtnPen" Tag="Pen" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Border Width="14" Height="14" CornerRadius="7" Margin="0,0,8,0">
-                        <Border.Background>
-                            <RadialGradientBrush>
-                                <GradientStop Color="#FFFF4444" Offset="0.3"/>
-                                <GradientStop Color="#80FF0000" Offset="1"/>
-                            </RadialGradientBrush>
-                        </Border.Background>
-                    </Border>
-                    <TextBlock Text="Pen" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <Button x:Name="BtnHighlighter" Tag="Highlighter" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Border Width="14" Height="14" CornerRadius="3" Margin="0,0,8,0"
-                            Background="#64FFFF00"/>
-                    <TextBlock Text="Highlight" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <Button x:Name="BtnLaser" Tag="Laser" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Border Width="14" Height="14" CornerRadius="7" Margin="0,0,8,0">
-                        <Border.Background>
-                            <RadialGradientBrush>
-                                <GradientStop Color="#FFFF0000" Offset="0"/>
-                                <GradientStop Color="#40FF0000" Offset="0.6"/>
-                                <GradientStop Color="#00FF0000" Offset="1"/>
-                            </RadialGradientBrush>
-                        </Border.Background>
-                    </Border>
-                    <TextBlock Text="Laser" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <Button x:Name="BtnEraser" Tag="Eraser" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Border Width="14" Height="14" CornerRadius="3" Margin="0,0,8,0"
-                            Background="#40FFFFFF" BorderBrush="#60FFFFFF" BorderThickness="1"/>
-                    <TextBlock Text="Eraser" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <!-- Shapes Section -->
-            <Border Height="1" Background="#15FFFFFF" Margin="6,6"/>
-            <TextBlock Text="SHAPES" FontSize="8" Foreground="#40FFFFFF"
-                       FontFamily="Segoe UI" FontWeight="Bold" Margin="10,0,0,3"/>
-
-            <Button x:Name="BtnArrow" Tag="Arrow" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="→" FontSize="14" Foreground="#80FFFFFF" Width="14"
-                               TextAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Text="Arrow" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <Button x:Name="BtnRect" Tag="Rectangle" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Border Width="14" Height="11" Margin="0,0,8,0"
-                            BorderBrush="#80FFFFFF" BorderThickness="1.5" CornerRadius="2"/>
-                    <TextBlock Text="Rect" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <Button x:Name="BtnCircle" Tag="Circle" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Width="13" Height="13" Margin="0,0,8,0"
-                             Stroke="#80FFFFFF" StrokeThickness="1.5"/>
-                    <TextBlock Text="Circle" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <Button x:Name="BtnText" Tag="Text" Click="ToolButton_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="A" FontSize="13" FontWeight="Bold" Foreground="#80FFFFFF"
-                               Width="14" TextAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Text="Text" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-
-            <Button x:Name="BtnTextSize" Click="TextSizeButton_Click" Margin="2,0,2,1">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Aa" FontSize="10" Foreground="#60FFFFFF"
-                               Width="14" TextAlignment="Center" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="TextSizeLabel" Text="Medium" VerticalAlignment="Center"
-                               FontSize="11" Foreground="#80FFFFFF"/>
-                </StackPanel>
-            </Button>
-
-            <!-- Colors Section -->
-            <Border Height="1" Background="#15FFFFFF" Margin="6,6"/>
-            <TextBlock Text="COLOR" FontSize="8" Foreground="#40FFFFFF"
-                       FontFamily="Segoe UI" FontWeight="Bold" Margin="10,0,0,3"/>
-
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2,0,4">
-                <Border x:Name="Color1" Width="22" Height="22" CornerRadius="11"
-                        Margin="3" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="1"
-                        BorderThickness="2" BorderBrush="Transparent">
-                    <Border.Background>
-                        <RadialGradientBrush>
-                            <GradientStop Color="#FFFF4444" Offset="0.3"/>
-                            <GradientStop Color="#CCFF0000" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Border.Background>
-                </Border>
-                <Border x:Name="Color2" Width="22" Height="22" CornerRadius="11"
-                        Margin="3" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="2"
-                        BorderThickness="2" BorderBrush="Transparent">
-                    <Border.Background>
-                        <RadialGradientBrush>
-                            <GradientStop Color="#FF5090FF" Offset="0.3"/>
-                            <GradientStop Color="#CC3278FF" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Border.Background>
-                </Border>
-                <Border x:Name="Color3" Width="22" Height="22" CornerRadius="11"
-                        Margin="3" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="3"
-                        BorderThickness="2" BorderBrush="Transparent">
-                    <Border.Background>
-                        <RadialGradientBrush>
-                            <GradientStop Color="#FF30E870" Offset="0.3"/>
-                            <GradientStop Color="#CC00C850" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Border.Background>
-                </Border>
-                <Border x:Name="Color4" Width="22" Height="22" CornerRadius="11"
-                        Margin="3" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="4"
-                        BorderThickness="2" BorderBrush="Transparent"
-                        Background="#EEFFFFFF"/>
-                <Border x:Name="Color5" Width="22" Height="22" CornerRadius="11"
-                        Margin="3" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="5"
-                        BorderThickness="2" BorderBrush="Transparent">
-                    <Border.Background>
-                        <RadialGradientBrush>
-                            <GradientStop Color="#FFFFF040" Offset="0.3"/>
-                            <GradientStop Color="#CCFFE600" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Border.Background>
-                </Border>
-            </StackPanel>
-
-            <!-- Fun Effects -->
-            <Border Height="1" Background="#15FFFFFF" Margin="6,4"/>
-            <TextBlock Text="FUN" FontSize="8" Foreground="#40FFFFFF"
-                       FontFamily="Segoe UI" FontWeight="Bold" Margin="10,0,0,3"/>
-
-            <Button x:Name="BtnConfetti" Click="ConfettiButton_Click" Margin="2,1">
-                <TextBlock Text="🎉  Confetti" HorizontalAlignment="Left"/>
-            </Button>
-
-            <!-- Actions -->
-            <Border Height="1" Background="#15FFFFFF" Margin="6,4"/>
-
-            <Button x:Name="BtnClear" Click="ClearButton_Click" Margin="2,2">
-                <TextBlock Text="Clear All" HorizontalAlignment="Center"/>
-            </Button>
-
-            <Button x:Name="BtnClickThrough" Click="ClickThroughButton_Click"
-                    Margin="2,1" Visibility="Collapsed">
-                <TextBlock Text="✕  Exit Draw" HorizontalAlignment="Center"/>
-            </Button>
-        </StackPanel>
-    </Border>
-
     <Window.Resources>
-        <Style TargetType="Button">
+        <!-- Icon-only tool button style (36x36) -->
+        <Style x:Key="ToolBtn" TargetType="Button">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#BBFFFFFF"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="10,6"/>
-            <Setter Property="Margin" Value="2,1"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="1,0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                CornerRadius="7" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="Center"/>
+                                CornerRadius="6" ToolTip="{TemplateBinding ToolTip}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#20FFFFFF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#18FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#35FFFFFF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#28FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Small action button style (30x30) -->
+        <Style x:Key="SmallBtn" TargetType="Button" BasedOn="{StaticResource ToolBtn}">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+        </Style>
     </Window.Resources>
+
+    <Grid>
+        <!-- Expanded toolbar -->
+        <Border x:Name="MainContent" CornerRadius="12"
+                MouseLeftButtonDown="Border_MouseLeftButtonDown">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#F2101018" Offset="0"/>
+                    <GradientStop Color="#F2141422" Offset="0.5"/>
+                    <GradientStop Color="#F2101018" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect Color="Black" BlurRadius="24" ShadowDepth="6" Opacity="0.55"/>
+            </Border.Effect>
+
+            <StackPanel Orientation="Horizontal" Margin="8,5,6,5">
+
+                <!-- Drag handle + indicator -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,4,0">
+                    <Ellipse Width="7" Height="7" Fill="#FF4060" Margin="0,0,5,0"/>
+                    <TextBlock Text="⋮⋮" FontSize="12" Foreground="#30FFFFFF" VerticalAlignment="Center"
+                               Margin="0,0,2,0" Cursor="SizeAll"/>
+                </StackPanel>
+
+                <!-- Separator -->
+                <Border Width="1" Background="#18FFFFFF" Margin="4,7"/>
+
+                <!-- Pointer + Select -->
+                <Button x:Name="BtnClickThrough" Style="{StaticResource ToolBtn}"
+                        Click="ClickThroughButton_Click" ToolTip="Mouse (Esc)">
+                    <!-- Cursor arrow icon -->
+                    <Canvas Width="16" Height="16">
+                        <Path Data="M 3,1 L 3,14 L 7,10 L 11,15 L 13,14 L 9,9 L 14,9 Z"
+                              Fill="#BBFFFFFF" Stroke="#60000000" StrokeThickness="0.5"/>
+                    </Canvas>
+                </Button>
+
+                <Button x:Name="BtnSelect" Style="{StaticResource ToolBtn}"
+                        Tag="Select" Click="ToolButton_Click" ToolTip="Select / Move">
+                    <!-- Dotted square icon -->
+                    <Border Width="16" Height="16">
+                        <Rectangle Stroke="#AAFFFFFF" StrokeThickness="1.3"
+                                   StrokeDashArray="2,2" RadiusX="2" RadiusY="2"/>
+                    </Border>
+                </Button>
+
+                <!-- Separator -->
+                <Border Width="1" Background="#18FFFFFF" Margin="4,7"/>
+
+                <!-- Drawing tools -->
+                <Button x:Name="BtnPen" Style="{StaticResource ToolBtn}"
+                        Tag="Pen" Click="ToolButton_Click" ToolTip="Pen (F9)">
+                    <Ellipse Width="12" Height="12">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#FFFF4444" Offset="0.3"/>
+                                <GradientStop Color="#80FF0000" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </Button>
+
+                <Button x:Name="BtnHighlighter" Style="{StaticResource ToolBtn}"
+                        Tag="Highlighter" Click="ToolButton_Click" ToolTip="Highlighter">
+                    <Border Width="14" Height="10" CornerRadius="2" Background="#64FFFF00"/>
+                </Button>
+
+                <Button x:Name="BtnLaser" Style="{StaticResource ToolBtn}"
+                        Tag="Laser" Click="ToolButton_Click" ToolTip="Laser (F11)">
+                    <Ellipse Width="12" Height="12">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#FFFF0000" Offset="0"/>
+                                <GradientStop Color="#40FF0000" Offset="0.6"/>
+                                <GradientStop Color="#00FF0000" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </Button>
+
+                <Button x:Name="BtnEraser" Style="{StaticResource ToolBtn}"
+                        Tag="Eraser" Click="ToolButton_Click" ToolTip="Eraser">
+                    <Border Width="13" Height="13" CornerRadius="2"
+                            Background="#30FFFFFF" BorderBrush="#50FFFFFF" BorderThickness="1"/>
+                </Button>
+
+                <!-- Separator -->
+                <Border Width="1" Background="#18FFFFFF" Margin="4,7"/>
+
+                <!-- Shape tools -->
+                <Button x:Name="BtnArrow" Style="{StaticResource ToolBtn}"
+                        Tag="Arrow" Click="ToolButton_Click" ToolTip="Arrow (Ctrl+Alt+A)">
+                    <TextBlock Text="→" FontSize="17" Foreground="#AAFFFFFF"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Margin="0,-3,0,0"/>
+                </Button>
+
+                <Button x:Name="BtnRect" Style="{StaticResource ToolBtn}"
+                        Tag="Rectangle" Click="ToolButton_Click" ToolTip="Rectangle (Ctrl+Alt+R)">
+                    <Border Width="14" Height="11"
+                            BorderBrush="#AAFFFFFF" BorderThickness="1.5" CornerRadius="2"/>
+                </Button>
+
+                <Button x:Name="BtnCircle" Style="{StaticResource ToolBtn}"
+                        Tag="Circle" Click="ToolButton_Click" ToolTip="Circle (Ctrl+Alt+O)">
+                    <Ellipse Width="13" Height="13"
+                             Stroke="#AAFFFFFF" StrokeThickness="1.5"/>
+                </Button>
+
+                <Button x:Name="BtnText" Style="{StaticResource ToolBtn}"
+                        Tag="Text" Click="ToolButton_Click" ToolTip="Text (Ctrl+Alt+X)">
+                    <TextBlock Text="A" FontSize="15" FontWeight="Bold" Foreground="#AAFFFFFF"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Button>
+
+                <Button x:Name="BtnTextSize" Style="{StaticResource SmallBtn}"
+                        Click="TextSizeButton_Click" ToolTip="Text Size: Medium">
+                    <TextBlock x:Name="TextSizeLabel" Text="Aa" FontSize="11"
+                               Foreground="#70FFFFFF" HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Button>
+
+                <!-- Separator -->
+                <Border Width="1" Background="#18FFFFFF" Margin="4,7"/>
+
+                <!-- Color swatches -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
+                    <Border x:Name="Color1" Width="20" Height="20" CornerRadius="10"
+                            Margin="2" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="1"
+                            BorderThickness="2" BorderBrush="Transparent">
+                        <Border.Background>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#FFFF4444" Offset="0.3"/>
+                                <GradientStop Color="#CCFF0000" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <Border x:Name="Color2" Width="20" Height="20" CornerRadius="10"
+                            Margin="2" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="2"
+                            BorderThickness="2" BorderBrush="Transparent">
+                        <Border.Background>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#FF5090FF" Offset="0.3"/>
+                                <GradientStop Color="#CC3278FF" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <Border x:Name="Color3" Width="20" Height="20" CornerRadius="10"
+                            Margin="2" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="3"
+                            BorderThickness="2" BorderBrush="Transparent">
+                        <Border.Background>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#FF30E870" Offset="0.3"/>
+                                <GradientStop Color="#CC00C850" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <Border x:Name="Color4" Width="20" Height="20" CornerRadius="10"
+                            Margin="2" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="4"
+                            BorderThickness="2" BorderBrush="Transparent"
+                            Background="#EEFFFFFF"/>
+                    <Border x:Name="Color5" Width="20" Height="20" CornerRadius="10"
+                            Margin="2" Cursor="Hand" MouseLeftButtonDown="Color_Click" Tag="5"
+                            BorderThickness="2" BorderBrush="Transparent">
+                        <Border.Background>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#FFFFF040" Offset="0.3"/>
+                                <GradientStop Color="#CCFFE600" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+                </StackPanel>
+
+                <!-- Separator -->
+                <Border Width="1" Background="#18FFFFFF" Margin="4,7"/>
+
+                <!-- Actions -->
+                <Button x:Name="BtnConfetti" Style="{StaticResource SmallBtn}"
+                        Click="ConfettiButton_Click" ToolTip="Confetti">
+                    <TextBlock Text="🎉" FontSize="14" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Margin="0,-1,0,0"/>
+                </Button>
+
+                <Button x:Name="BtnClear" Style="{StaticResource SmallBtn}"
+                        Click="ClearButton_Click" ToolTip="Clear All (F10)">
+                    <TextBlock Text="🗑" FontSize="13" HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Button>
+
+                <!-- Separator -->
+                <Border Width="1" Background="#18FFFFFF" Margin="4,7"/>
+
+                <!-- Close -->
+                <Border Width="24" Height="24" CornerRadius="12" Cursor="Hand"
+                        Background="Transparent" VerticalAlignment="Center"
+                        MouseLeftButtonDown="CloseButton_Click" Margin="0,0,2,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#30FF4060"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="✕" FontSize="11" Foreground="#60FFFFFF"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Collapsed minimal button (hidden by default) -->
+        <Border x:Name="MinimalButton" Visibility="Collapsed"
+                Width="42" Height="42" CornerRadius="21"
+                Cursor="Hand" MouseLeftButtonDown="MinimalButton_Click">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#E8141420" Offset="0"/>
+                    <GradientStop Color="#E81A1A2E" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect Color="Black" BlurRadius="16" ShadowDepth="4" Opacity="0.5"/>
+            </Border.Effect>
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background">
+                                <Setter.Value>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#F0202030" Offset="0"/>
+                                        <GradientStop Color="#F0242438" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <!-- Pen icon in collapsed state -->
+            <Canvas Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Path Data="M 14,2 L 16,4 L 6,14 L 3,15 L 4,12 Z"
+                      Fill="#CCFFFFFF" Stroke="#40000000" StrokeThickness="0.5"/>
+                <Path Data="M 12,4 L 14,6" Stroke="#60000000" StrokeThickness="0.8"/>
+            </Canvas>
+        </Border>
+    </Grid>
 </Window>

@@ -14,6 +14,7 @@ public partial class ToolbarWindow : Window
     private readonly Border[] _colorSwatches;
     private readonly Dictionary<AnnotationTool, Button> _toolButtons;
     private int _activeColorIndex = 1;
+    private bool _isCollapsed;
 
     public event Action<AnnotationTool>? ToolSelected;
     public event Action<int>? ColorSelected;
@@ -48,9 +49,10 @@ public partial class ToolbarWindow : Window
 
         Loaded += (_, _) =>
         {
+            // Position top-center of primary monitor work area
             var screen = SystemParameters.WorkArea;
-            Left = screen.Right - ActualWidth - 16;
-            Top = screen.Top + (screen.Height - ActualHeight) / 2;
+            Left = screen.Left + (screen.Width - ActualWidth) / 2;
+            Top = screen.Top + 10;
         };
 
         SetActiveColor(1);
@@ -67,15 +69,44 @@ public partial class ToolbarWindow : Window
     /// <summary>Returns screen-pixel bounds of the toolbar with padding for hover detection.</summary>
     public Rect GetScreenBounds()
     {
-        // Convert WPF device-independent units to screen pixels using DPI scale
         var source = PresentationSource.FromVisual(this);
         double dpiX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
         double dpiY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
-        const double pad = 15;
+        const double pad = 12;
         return new Rect(
             Left * dpiX - pad, Top * dpiY - pad,
             ActualWidth * dpiX + pad * 2, ActualHeight * dpiY + pad * 2);
     }
+
+    // --- Collapse / Expand ---
+
+    public void CollapseToMinimal()
+    {
+        MainContent.Visibility = Visibility.Collapsed;
+        MinimalButton.Visibility = Visibility.Visible;
+        _isCollapsed = true;
+        // Re-center the small dot
+        var screen = SystemParameters.WorkArea;
+        Left = screen.Left + (screen.Width - 42) / 2;
+    }
+
+    public void ExpandFromMinimal()
+    {
+        if (!_isCollapsed) return;
+        MinimalButton.Visibility = Visibility.Collapsed;
+        MainContent.Visibility = Visibility.Visible;
+        _isCollapsed = false;
+        // Re-center the full toolbar
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var screen = SystemParameters.WorkArea;
+            Left = screen.Left + (screen.Width - ActualWidth) / 2;
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    public bool IsCollapsed => _isCollapsed;
+
+    // --- Event handlers ---
 
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -114,11 +145,6 @@ public partial class ToolbarWindow : Window
         TextSizeCycled?.Invoke();
     }
 
-    public void UpdateTextSizeLabel(string label)
-    {
-        TextSizeLabel.Text = label;
-    }
-
     private void ClearButton_Click(object sender, RoutedEventArgs e)
     {
         ClearRequested?.Invoke();
@@ -129,27 +155,47 @@ public partial class ToolbarWindow : Window
         ToolSelected?.Invoke(AnnotationTool.None);
     }
 
+    private void MinimalButton_Click(object sender, MouseButtonEventArgs e)
+    {
+        ExpandFromMinimal();
+        ToolSelected?.Invoke(AnnotationTool.Pen);
+        e.Handled = true;
+    }
+
+    // --- Visual state ---
+
+    public void UpdateTextSizeLabel(string label)
+    {
+        BtnTextSize.ToolTip = $"Text Size: {label}";
+        TextSizeLabel.Text = label.Length <= 2 ? label : label[..1].ToUpper();
+    }
+
     public void SetActiveTool(AnnotationTool tool)
     {
+        // Highlight active tool button
         foreach (var (t, btn) in _toolButtons)
         {
             if (t == tool)
             {
-                btn.Background = new SolidColorBrush(Color.FromArgb(45, 100, 160, 255));
+                btn.Background = new SolidColorBrush(Color.FromArgb(50, 80, 150, 255));
                 btn.Foreground = new SolidColorBrush(Colors.White);
-                btn.FontWeight = FontWeights.SemiBold;
             }
             else
             {
                 btn.Background = Brushes.Transparent;
                 btn.Foreground = new SolidColorBrush(Color.FromArgb(187, 255, 255, 255));
-                btn.FontWeight = FontWeights.Normal;
             }
         }
 
-        BtnClickThrough.Visibility = tool != AnnotationTool.None
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        // Highlight Pointer button when in mouse/click-through mode
+        if (tool == AnnotationTool.None)
+        {
+            BtnClickThrough.Background = new SolidColorBrush(Color.FromArgb(50, 80, 150, 255));
+        }
+        else
+        {
+            BtnClickThrough.Background = Brushes.Transparent;
+        }
     }
 
     public void SetActiveColor(int index)
