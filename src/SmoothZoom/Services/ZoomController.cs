@@ -38,6 +38,7 @@ public class ZoomController : IDisposable
     private const float MinZoom = 1.0f;
     private const float MaxZoom = 6.0f;
     private const float ZoomStep = 0.25f;
+    private const int ScrollAnimationMs = 200; // Smooth ease per scroll notch
 
     public bool IsZoomed => _state != ZoomState.Idle;
 
@@ -72,14 +73,8 @@ public class ZoomController : IDisposable
 
         if (newTarget <= 1.0f)
         {
-            // Zoom out completely — snap to 1x and reset
-            _currentScale = 1.0f;
-            _targetScale = 1.0f;
-            _state = ZoomState.Idle;
-            _monitorCaptured = false;
-            _timer.Stop();
-            _magnification.Reset();
-            _onZoomStateChanged(false);
+            // Smooth zoom out to 1x
+            AnimateTo(1.0f, ScrollAnimationMs);
             return;
         }
 
@@ -91,13 +86,15 @@ public class ZoomController : IDisposable
             _smoothX = cursor.X;
             _smoothY = cursor.Y;
             _monitorCaptured = true;
-            _viewLocked = true; // Default: locked view
+            _viewLocked = true;
         }
 
-        // Instant scale change — no animation, no flicker
-        _currentScale = newTarget;
+        // Smooth ease to target — fullscreen API is GPU-composited so no flicker
+        _startScale = _currentScale;
         _targetScale = newTarget;
-        _state = ZoomState.Zoomed;
+        _animationStart = DateTime.UtcNow;
+        _animationDuration = TimeSpan.FromMilliseconds(ScrollAnimationMs);
+        _state = ZoomState.Animating;
         _timer.Start();
         _onZoomStateChanged(true);
     }
