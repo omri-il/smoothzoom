@@ -23,6 +23,7 @@ public class KeyboardHookService : IDisposable
     public event Action<int>? ScrollWheel;
     public event Action? HighlightTogglePressed;
     public event Action? HelpTogglePressed;
+    public event Action<bool>? MiddleButtonChanged; // true = pressed, false = released
 
     public KeyboardHookService()
     {
@@ -81,6 +82,9 @@ public class KeyboardHookService : IDisposable
                     break;
                 case 0xA4 or 0xA5:
                     _altPressed = isKeyDown;
+                    // Swallow Alt key when Ctrl is also held (prevents system menu beep)
+                    if (_ctrlPressed)
+                        return (IntPtr)1;
                     break;
             }
 
@@ -123,6 +127,14 @@ public class KeyboardHookService : IDisposable
                     ScrollWheel?.Invoke(delta > 0 ? 1 : -1);
                     return (IntPtr)1;
                 }
+            }
+            else if (msg == User32.WM_MBUTTONDOWN)
+            {
+                MiddleButtonChanged?.Invoke(true);
+            }
+            else if (msg == User32.WM_MBUTTONUP)
+            {
+                MiddleButtonChanged?.Invoke(false);
             }
         }
 

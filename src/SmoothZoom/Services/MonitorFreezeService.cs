@@ -1,14 +1,9 @@
-using System.Runtime.InteropServices;
 using SmoothZoom.Native;
 using WinForms = System.Windows.Forms;
 using Drawing = System.Drawing;
 
 namespace SmoothZoom.Services;
 
-/// <summary>
-/// Captures screenshots of non-active monitors and displays them as
-/// frozen overlays so they appear unaffected by fullscreen magnification.
-/// </summary>
 public class MonitorFreezeService : IDisposable
 {
     private readonly List<WinForms.Form> _overlays = new();
@@ -21,18 +16,18 @@ public class MonitorFreezeService : IDisposable
         {
             var bounds = screen.Bounds;
 
-            // Skip the active monitor
             if (bounds.Left == activeMonitorBounds.Left &&
                 bounds.Top == activeMonitorBounds.Top &&
                 bounds.Right == activeMonitorBounds.Right &&
                 bounds.Bottom == activeMonitorBounds.Bottom)
                 continue;
 
-            // Capture screenshot of this monitor (shows what was there before zoom)
             var screenshot = CaptureScreen(bounds);
             if (screenshot == null) continue;
 
-            var overlay = new FreezeOverlayForm
+            // Simple topmost form with screenshot — NO click-through needed
+            // since this is on the OTHER monitor the user isn't using
+            var overlay = new WinForms.Form
             {
                 FormBorderStyle = WinForms.FormBorderStyle.None,
                 ShowInTaskbar = false,
@@ -45,12 +40,11 @@ public class MonitorFreezeService : IDisposable
             };
             overlay.Show();
 
-            // Make it click-through so user can still interact if needed
+            // Hide from Alt-Tab only
             IntPtr hwnd = overlay.Handle;
             int exStyle = User32.GetWindowLong(hwnd, User32.GWL_EXSTYLE);
             User32.SetWindowLong(hwnd, User32.GWL_EXSTYLE,
-                exStyle | (int)(User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT
-                              | User32.WS_EX_TOOLWINDOW | User32.WS_EX_NOACTIVATE));
+                exStyle | (int)User32.WS_EX_TOOLWINDOW);
 
             _overlays.Add(overlay);
         }
@@ -87,32 +81,5 @@ public class MonitorFreezeService : IDisposable
     public void Dispose()
     {
         UnfreezeAll();
-    }
-}
-
-internal class FreezeOverlayForm : WinForms.Form
-{
-    private const int WM_NCHITTEST = 0x0084;
-    private const int HTTRANSPARENT = -1;
-
-    protected override void WndProc(ref WinForms.Message m)
-    {
-        if (m.Msg == WM_NCHITTEST)
-        {
-            m.Result = (IntPtr)HTTRANSPARENT;
-            return;
-        }
-        base.WndProc(ref m);
-    }
-
-    protected override WinForms.CreateParams CreateParams
-    {
-        get
-        {
-            var cp = base.CreateParams;
-            cp.ExStyle |= (int)(User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT
-                              | User32.WS_EX_TOOLWINDOW | User32.WS_EX_NOACTIVATE);
-            return cp;
-        }
     }
 }

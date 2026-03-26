@@ -27,6 +27,7 @@ public class ZoomController : IDisposable
 
     // View lock (default ON)
     private bool _viewLocked = true;
+    private bool _middleDragging; // Temporary cursor tracking while middle button held
 
     // Settings
     public float TargetZoomLevel { get; set; } = 2.0f;
@@ -38,8 +39,6 @@ public class ZoomController : IDisposable
     private const float MaxZoom = 6.0f;
     private const float ZoomStep = 0.25f;
     private const int ScrollAnimationMs = 200;
-    private const float EdgeZone = 80f;    // Pixels from edge where panning starts
-    private const float MaxPanSpeed = 8f;  // Max pixels per frame to pan
 
     public bool IsZoomed => _state != ZoomState.Idle;
 
@@ -98,6 +97,15 @@ public class ZoomController : IDisposable
     {
         if (_state == ZoomState.Idle) return;
         _viewLocked = !_viewLocked;
+    }
+
+    /// <summary>
+    /// Middle-click drag: while held, viewport follows cursor (temporary tracking).
+    /// On release, viewport locks at current position.
+    /// </summary>
+    public void SetMiddleDragging(bool dragging)
+    {
+        _middleDragging = dragging;
     }
 
     public void PanicReset()
@@ -162,11 +170,10 @@ public class ZoomController : IDisposable
             }
         }
 
-        // 2. Cursor tracking or edge panning
+        // 2. Cursor tracking — active when view unlocked OR middle-dragging
         User32.GetCursorPos(out var cursor);
-        if (!_viewLocked)
+        if (!_viewLocked || _middleDragging)
         {
-            // Full cursor tracking mode
             float dx = cursor.X - _smoothX;
             float dy = cursor.Y - _smoothY;
             float distance = MathF.Sqrt(dx * dx + dy * dy);
@@ -182,58 +189,12 @@ public class ZoomController : IDisposable
                 _smoothY += dy * CursorTrackingSpeed;
             }
         }
-        else
-        {
-            // Locked mode — edge panning when cursor nears screen edge
-            ApplyEdgePan(cursor.X, cursor.Y);
-        }
 
         // 3. Apply transform
         _magnification.SetZoom(_currentScale,
             (int)MathF.Round(_smoothX),
             (int)MathF.Round(_smoothY),
             _activeMonitorBounds);
-    }
-
-    private void ApplyEdgePan(int cursorX, int cursorY)
-    {
-        if (_currentScale <= 1.0f) return;
-
-        int monLeft = _activeMonitorBounds.Left;
-        int monTop = _activeMonitorBounds.Top;
-        int monRight = _activeMonitorBounds.Right;
-        int monBottom = _activeMonitorBounds.Bottom;
-
-        float panX = 0, panY = 0;
-
-        // Left edge
-        if (cursorX < monLeft + EdgeZone)
-        {
-            float proximity = 1f - (cursorX - monLeft) / EdgeZone;
-            panX = -MaxPanSpeed * proximity;
-        }
-        // Right edge
-        else if (cursorX > monRight - EdgeZone)
-        {
-            float proximity = 1f - (monRight - cursorX) / EdgeZone;
-            panX = MaxPanSpeed * proximity;
-        }
-
-        // Top edge
-        if (cursorY < monTop + EdgeZone)
-        {
-            float proximity = 1f - (cursorY - monTop) / EdgeZone;
-            panY = -MaxPanSpeed * proximity;
-        }
-        // Bottom edge
-        else if (cursorY > monBottom - EdgeZone)
-        {
-            float proximity = 1f - (monBottom - cursorY) / EdgeZone;
-            panY = MaxPanSpeed * proximity;
-        }
-
-        _smoothX += panX;
-        _smoothY += panY;
     }
 
     private static float CubicEaseInOut(float t)
