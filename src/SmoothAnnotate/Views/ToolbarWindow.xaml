@@ -23,16 +23,26 @@
         </Border.Effect>
 
         <StackPanel Margin="8,10,8,8">
-            <!-- Header -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
-                <Ellipse Width="8" Height="8" Fill="#FF4060" Margin="0,0,4,0"/>
-                <TextBlock Text="ANNOTATE"
-                           FontSize="10"
-                           FontFamily="Segoe UI"
-                           FontWeight="Bold"
-                           Foreground="#60FFFFFF"
-                           VerticalAlignment="Center"/>
-            </StackPanel>
+            <!-- Header with close button -->
+            <Grid Margin="0,0,0,8">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Ellipse Width="8" Height="8" Fill="#FF4060" Margin="0,0,4,0"/>
+                    <TextBlock Text="ANNOTATE"
+                               FontSize="10"
+                               FontFamily="Segoe UI"
+                               FontWeight="Bold"
+                               Foreground="#60FFFFFF"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Width="18" Height="18" CornerRadius="9"
+                        Background="Transparent" Cursor="Hand"
+                        MouseLeftButtonDown="CloseButton_Click"
+                        Margin="0,-2,-2,0">
+                    <TextBlock Text="✕" FontSize="10" Foreground="#60FFFFFF"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </Grid>
 
             <!-- Drawing Tools Section -->
             <TextBlock Text="DRAW" FontSize="8" Foreground="#40FFFFFF"

@@ -19,6 +19,7 @@ public partial class ToolbarWindow : Window
     public event Action<int>? ColorSelected;
     public event Action? ClearRequested;
     public event Action? TextSizeCycled;
+    public event Action? CloseRequested;
 
     public ToolbarWindow()
     {
@@ -93,6 +94,12 @@ public partial class ToolbarWindow : Window
     {
         if (sender is Border border && border.Tag is string tagStr && int.TryParse(tagStr, out int idx))
             ColorSelected?.Invoke(idx);
+    }
+
+    private void CloseButton_Click(object sender, MouseButtonEventArgs e)
+    {
+        CloseRequested?.Invoke();
+        e.Handled = true;
     }
 
     private void TextSizeButton_Click(object sender, RoutedEventArgs e)

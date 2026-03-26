@@ -81,6 +81,7 @@ public partial class OverlayWindow : Window
             string[] labels = { "Small", "Medium", "Large" };
             _toolbar?.UpdateTextSizeLabel(labels[_textSizeIndex]);
         };
+        _toolbar.CloseRequested += () => System.Windows.Application.Current.Shutdown();
         _toolbar.Show();
 
         // Timer to detect when cursor is over toolbar and pass clicks through
