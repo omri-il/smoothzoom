@@ -120,6 +120,15 @@
                 </StackPanel>
             </Button>
 
+            <Button x:Name="BtnTextSize" Click="TextSizeButton_Click" Margin="2,0,2,1">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Aa" FontSize="10" Foreground="#60FFFFFF"
+                               Width="14" TextAlignment="Center" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TextSizeLabel" Text="Medium" VerticalAlignment="Center"
+                               FontSize="11" Foreground="#80FFFFFF"/>
+                </StackPanel>
+            </Button>
+
             <!-- Colors Section -->
             <Border Height="1" Background="#15FFFFFF" Margin="6,6"/>
             <TextBlock Text="COLOR" FontSize="8" Foreground="#40FFFFFF"

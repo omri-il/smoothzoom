@@ -18,6 +18,7 @@ public partial class ToolbarWindow : Window
     public event Action<AnnotationTool>? ToolSelected;
     public event Action<int>? ColorSelected;
     public event Action? ClearRequested;
+    public event Action? TextSizeCycled;
 
     public ToolbarWindow()
     {
@@ -60,11 +61,17 @@ public partial class ToolbarWindow : Window
             OverlayService.RaiseToTop(_hwnd);
     }
 
-    /// <summary>Returns screen-space bounds of the toolbar with padding for easy hovering.</summary>
+    /// <summary>Returns screen-pixel bounds of the toolbar with padding for hover detection.</summary>
     public Rect GetScreenBounds()
     {
-        const double pad = 10;
-        return new Rect(Left - pad, Top - pad, ActualWidth + pad * 2, ActualHeight + pad * 2);
+        // Convert WPF device-independent units to screen pixels using DPI scale
+        var source = PresentationSource.FromVisual(this);
+        double dpiX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        double dpiY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+        const double pad = 15;
+        return new Rect(
+            Left * dpiX - pad, Top * dpiY - pad,
+            ActualWidth * dpiX + pad * 2, ActualHeight * dpiY + pad * 2);
     }
 
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -86,6 +93,16 @@ public partial class ToolbarWindow : Window
     {
         if (sender is Border border && border.Tag is string tagStr && int.TryParse(tagStr, out int idx))
             ColorSelected?.Invoke(idx);
+    }
+
+    private void TextSizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        TextSizeCycled?.Invoke();
+    }
+
+    public void UpdateTextSizeLabel(string label)
+    {
+        TextSizeLabel.Text = label;
     }
 
     private void ClearButton_Click(object sender, RoutedEventArgs e)

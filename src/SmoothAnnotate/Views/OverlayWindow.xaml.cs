@@ -36,6 +36,9 @@ public partial class OverlayWindow : Window
 
     // Text tool state
     private TextBox? _activeTextBox;
+    private double _textSize = 32; // Medium default
+    private static readonly double[] TextSizes = { 24, 32, 48 }; // Small, Medium, Large
+    private int _textSizeIndex = 1; // Start at Medium
 
     // Color palette
     private static readonly Color[] Palette = new[]
@@ -72,6 +75,12 @@ public partial class OverlayWindow : Window
         _toolbar.ToolSelected += OnToolbarToolSelected;
         _toolbar.ColorSelected += SetColor;
         _toolbar.ClearRequested += ClearAllStrokes;
+        _toolbar.TextSizeCycled += () =>
+        {
+            CycleTextSize();
+            string[] labels = { "Small", "Medium", "Large" };
+            _toolbar?.UpdateTextSizeLabel(labels[_textSizeIndex]);
+        };
         _toolbar.Show();
 
         // Timer to detect when cursor is over toolbar and pass clicks through
@@ -283,6 +292,7 @@ public partial class OverlayWindow : Window
         {
             _isDrawMode = true;
             _isOverToolbar = false;
+            RepositionToCurrentMonitor();
             Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
             OverlayService.RemoveClickThrough(_hwnd);
             _toolbar?.RaiseAboveOverlay();
@@ -298,6 +308,33 @@ public partial class OverlayWindow : Window
         SetTool(AnnotationTool.None);
         Background = Brushes.Transparent;
         OverlayService.SetClickThrough(_hwnd);
+        // Expand back to full virtual screen for click-through mode
+        Left = SystemParameters.VirtualScreenLeft;
+        Top = SystemParameters.VirtualScreenTop;
+        Width = SystemParameters.VirtualScreenWidth;
+        Height = SystemParameters.VirtualScreenHeight;
+    }
+
+    private void RepositionToCurrentMonitor()
+    {
+        Native.User32.GetCursorPos(out var pt);
+        var hMonitor = Native.User32.MonitorFromPoint(pt, Native.User32.MONITOR_DEFAULTTONEAREST);
+
+        var mi = new Native.User32.MONITORINFO();
+        mi.cbSize = System.Runtime.InteropServices.Marshal.SizeOf(mi);
+
+        if (Native.User32.GetMonitorInfo(hMonitor, ref mi))
+        {
+            // Convert screen pixels to WPF device-independent units
+            var source = PresentationSource.FromVisual(this);
+            double dpiX = source?.CompositionTarget?.TransformFromDevice.M11 ?? 1.0;
+            double dpiY = source?.CompositionTarget?.TransformFromDevice.M22 ?? 1.0;
+
+            Left = mi.rcMonitor.Left * dpiX;
+            Top = mi.rcMonitor.Top * dpiY;
+            Width = (mi.rcMonitor.Right - mi.rcMonitor.Left) * dpiX;
+            Height = (mi.rcMonitor.Bottom - mi.rcMonitor.Top) * dpiY;
+        }
     }
 
     private void OnToolbarHitCheck(object? sender, EventArgs e)
@@ -589,17 +626,19 @@ public partial class OverlayWindow : Window
 
         _activeTextBox = new TextBox
         {
-            FontSize = 20,
+            FontSize = _textSize,
             FontFamily = new FontFamily("Segoe UI"),
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(_currentColor),
             Background = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
             BorderThickness = new Thickness(1),
             BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
-            Padding = new Thickness(4, 2, 4, 2),
-            MinWidth = 60,
+            Padding = new Thickness(6, 4, 6, 4),
+            MinWidth = 80,
             AcceptsReturn = false,
-            CaretBrush = new SolidColorBrush(_currentColor)
+            CaretBrush = new SolidColorBrush(_currentColor),
+            FlowDirection = System.Windows.FlowDirection.RightToLeft,
+            TextAlignment = TextAlignment.Right
         };
 
         Canvas.SetLeft(_activeTextBox, position.X);
@@ -631,15 +670,20 @@ public partial class OverlayWindow : Window
 
         if (!string.IsNullOrWhiteSpace(text))
         {
+            // Detect Hebrew characters for RTL support
+            bool hasHebrew = text.Any(c => c >= '\u0590' && c <= '\u05FF');
+
             var textBlock = new TextBlock
             {
                 Text = text,
-                FontSize = 20,
+                FontSize = _textSize,
                 FontFamily = new FontFamily("Segoe UI"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(color),
                 Padding = new Thickness(4, 2, 4, 2),
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                FlowDirection = hasHebrew ? System.Windows.FlowDirection.RightToLeft : System.Windows.FlowDirection.LeftToRight,
+                TextAlignment = hasHebrew ? TextAlignment.Right : TextAlignment.Left
             };
             textBlock.Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
@@ -654,6 +698,16 @@ public partial class OverlayWindow : Window
         }
 
         _activeTextBox = null;
+    }
+
+    // --- Text Size ---
+
+    public void CycleTextSize()
+    {
+        _textSizeIndex = (_textSizeIndex + 1) % TextSizes.Length;
+        _textSize = TextSizes[_textSizeIndex];
+        string[] labels = { "SMALL", "MEDIUM", "LARGE" };
+        ShowModeIndicator($"TEXT {labels[_textSizeIndex]}");
     }
 
     // --- Custom Cursor ---
