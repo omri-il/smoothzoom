@@ -49,6 +49,7 @@ public partial class App : System.Windows.Application
 
         _zoomController = new ZoomController(_magnification, OnZoomStateChanged);
         _cursorHighlight = new CursorHighlightService();
+        _cursorHighlight.SetMagnificationService(_magnification);
         ApplySettings();
 
         SetupTrayIcon();
@@ -66,6 +67,13 @@ public partial class App : System.Windows.Application
         if (_cursorHighlight != null)
         {
             _cursorHighlight.RingSize = _settings.HighlightRingSize;
+            try
+            {
+                _cursorHighlight.RingColor =
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        _settings.HighlightColor);
+            }
+            catch { /* keep default if parse fails */ }
         }
     }
 

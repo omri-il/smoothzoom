@@ -14,6 +14,27 @@ public class MagnificationService : IDisposable
     private User32.RECT _currentMonitorBounds;
     private bool _windowsCreated;
     private float _lastScale;
+    private readonly List<IntPtr> _excludeWindows = new();
+
+    /// <summary>
+    /// Add a window handle to exclude from magnification (e.g., cursor highlight overlay).
+    /// Must be called before zoom is activated.
+    /// </summary>
+    public void ExcludeWindow(IntPtr hwnd)
+    {
+        if (!_excludeWindows.Contains(hwnd))
+            _excludeWindows.Add(hwnd);
+        // If already zoomed, update the filter list immediately
+        if (_magnifierHwnd != IntPtr.Zero)
+            UpdateFilterList();
+    }
+
+    public void RemoveExcludedWindow(IntPtr hwnd)
+    {
+        _excludeWindows.Remove(hwnd);
+        if (_magnifierHwnd != IntPtr.Zero)
+            UpdateFilterList();
+    }
 
     public bool Initialize()
     {
@@ -125,12 +146,8 @@ public class MagnificationService : IDisposable
             return;
         }
 
-        // Exclude host form from being magnified (prevents self-magnification loop)
-        IntPtr filterList = Marshal.AllocHGlobal(IntPtr.Size);
-        Marshal.WriteIntPtr(filterList, hostHwnd);
-        MagnificationApi.MagSetWindowFilterList(_magnifierHwnd,
-            MagnificationApi.MW_FILTERMODE_EXCLUDE, 1, filterList);
-        Marshal.FreeHGlobal(filterList);
+        // Exclude host form + any registered overlay windows from magnification
+        UpdateFilterList();
 
         _lastScale = 0; // Force transform update on next SetZoom
         _windowsCreated = true;
@@ -151,6 +168,23 @@ public class MagnificationService : IDisposable
         }
         _windowsCreated = false;
         _lastScale = 0;
+    }
+
+    private void UpdateFilterList()
+    {
+        if (_magnifierHwnd == IntPtr.Zero || _hostForm == null) return;
+
+        // Build list: host form + all registered exclude windows
+        var handles = new List<IntPtr> { _hostForm.Handle };
+        handles.AddRange(_excludeWindows);
+
+        IntPtr filterList = Marshal.AllocHGlobal(IntPtr.Size * handles.Count);
+        for (int i = 0; i < handles.Count; i++)
+            Marshal.WriteIntPtr(filterList, i * IntPtr.Size, handles[i]);
+
+        MagnificationApi.MagSetWindowFilterList(_magnifierHwnd,
+            MagnificationApi.MW_FILTERMODE_EXCLUDE, handles.Count, filterList);
+        Marshal.FreeHGlobal(filterList);
     }
 
     private static bool BoundsEqual(User32.RECT a, User32.RECT b) =>

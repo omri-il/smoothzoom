@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using SmoothZoom.Native;
@@ -13,10 +14,13 @@ public class CursorHighlightService : IDisposable
     private Window? _overlayWindow;
     private readonly DispatcherTimer _timer;
     private bool _isActive;
+    private MagnificationService? _magnificationService;
 
     // Configurable
     public double RingSize { get; set; } = 50;
     public double RingThickness { get; set; } = 3;
+    public System.Windows.Media.Color RingColor { get; set; } =
+        System.Windows.Media.Color.FromArgb(220, 65, 130, 220); // Blue
 
     public CursorHighlightService()
     {
@@ -25,6 +29,14 @@ public class CursorHighlightService : IDisposable
             Interval = TimeSpan.FromMilliseconds(16)
         };
         _timer.Tick += OnTimerTick;
+    }
+
+    /// <summary>
+    /// Set the magnification service so the highlight window can be excluded from zoom.
+    /// </summary>
+    public void SetMagnificationService(MagnificationService service)
+    {
+        _magnificationService = service;
     }
 
     public void Toggle()
@@ -41,7 +53,9 @@ public class CursorHighlightService : IDisposable
     {
         if (_overlayWindow != null) return;
 
-        double windowSize = RingSize + RingThickness * 2 + 4; // small padding
+        // Window needs extra space for the glow shadow
+        double glowRadius = 8;
+        double windowSize = RingSize + RingThickness * 2 + glowRadius * 2 + 4;
 
         _overlayWindow = new Window
         {
@@ -57,18 +71,23 @@ public class CursorHighlightService : IDisposable
 
         var canvas = new Canvas { Width = windowSize, Height = windowSize };
 
-        // Clean crisp ring — like the blue circle reference
+        // Clean ring with subtle outer glow
         var ring = new Ellipse
         {
             Width = RingSize,
             Height = RingSize,
-            Stroke = new SolidColorBrush(
-                System.Windows.Media.Color.FromArgb(220, 65, 130, 220)), // Clean blue
+            Stroke = new SolidColorBrush(RingColor),
             StrokeThickness = RingThickness,
             Fill = System.Windows.Media.Brushes.Transparent,
+            Effect = new DropShadowEffect
+            {
+                Color = RingColor,
+                BlurRadius = glowRadius,
+                ShadowDepth = 0,
+                Opacity = 0.6,
+            },
         };
 
-        // Anti-alias the ring
         RenderOptions.SetEdgeMode(ring, EdgeMode.Unspecified);
 
         double offset = (windowSize - RingSize) / 2;
@@ -79,6 +98,10 @@ public class CursorHighlightService : IDisposable
         _overlayWindow.Content = canvas;
         _overlayWindow.Show();
         MakeClickThrough();
+
+        // Register with magnifier so it's excluded from zoom
+        var hwnd = new WindowInteropHelper(_overlayWindow).Handle;
+        _magnificationService?.ExcludeWindow(hwnd);
 
         _isActive = true;
         _timer.Start();
@@ -96,8 +119,13 @@ public class CursorHighlightService : IDisposable
     private void Deactivate()
     {
         _timer.Stop();
-        _overlayWindow?.Close();
-        _overlayWindow = null;
+        if (_overlayWindow != null)
+        {
+            var hwnd = new WindowInteropHelper(_overlayWindow).Handle;
+            _magnificationService?.RemoveExcludedWindow(hwnd);
+            _overlayWindow.Close();
+            _overlayWindow = null;
+        }
         _isActive = false;
     }
 

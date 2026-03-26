@@ -19,6 +19,7 @@ public partial class SettingsWindow : Window
         ZoomSpeedSlider.Value = currentSettings.ZoomDurationMs;
         TrackingSlider.Value = currentSettings.CursorTrackingSpeed;
         RingSizeSlider.Value = currentSettings.HighlightRingSize;
+        SetColorRadio(currentSettings.HighlightColor);
         StartWithWindowsCheckBox.IsChecked = currentSettings.StartWithWindows;
     }
 
@@ -53,6 +54,27 @@ public partial class SettingsWindow : Window
             RingSizeLabel.Text = $"{(int)e.NewValue}px";
     }
 
+    private void SetColorRadio(string color)
+    {
+        switch (color)
+        {
+            case "#DCFFE632": ColorYellow.IsChecked = true; break;
+            case "#DCFF4050": ColorRed.IsChecked = true; break;
+            case "#DC40C040": ColorGreen.IsChecked = true; break;
+            case "#DCFFFFFF": ColorWhite.IsChecked = true; break;
+            default: ColorBlue.IsChecked = true; break;
+        }
+    }
+
+    private string GetSelectedColor()
+    {
+        if (ColorYellow.IsChecked == true) return "#DCFFE632";
+        if (ColorRed.IsChecked == true) return "#DCFF4050";
+        if (ColorGreen.IsChecked == true) return "#DC40C040";
+        if (ColorWhite.IsChecked == true) return "#DCFFFFFF";
+        return "#DC4182DC"; // Blue default
+    }
+
     private void SaveAndClose_Click(object sender, RoutedEventArgs e)
     {
         Settings = new AppSettings
@@ -61,6 +83,7 @@ public partial class SettingsWindow : Window
             ZoomDurationMs = (int)ZoomSpeedSlider.Value,
             CursorTrackingSpeed = (float)TrackingSlider.Value,
             HighlightRingSize = RingSizeSlider.Value,
+            HighlightColor = GetSelectedColor(),
             StartWithWindows = StartWithWindowsCheckBox.IsChecked ?? true
         };
         Saved = true;
