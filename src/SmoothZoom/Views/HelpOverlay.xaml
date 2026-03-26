@@ -1,0 +1,122 @@
+<Window x:Class="SmoothZoom.Views.HelpOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SmoothZoom Help"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen"
+        SizeToContent="WidthAndHeight"
+        MouseDown="Window_MouseDown"
+        KeyDown="Window_KeyDown">
+
+    <Border Background="#E8181825" CornerRadius="16" Padding="32,24"
+            BorderBrush="#40899BFA" BorderThickness="1">
+        <StackPanel>
+            <!-- Header -->
+            <TextBlock Text="SmoothZoom" FontSize="22" FontWeight="Bold"
+                       Foreground="#89B4FA" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+            <TextBlock Text="Keyboard Shortcuts" FontSize="13"
+                       Foreground="#6C7086" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+
+            <!-- Separator -->
+            <Border Height="1" Background="#30CDD6F4" Margin="0,0,0,16"/>
+
+            <!-- Zoom section -->
+            <TextBlock Text="ZOOM" FontSize="11" FontWeight="Bold"
+                       Foreground="#6C7086" Margin="0,0,0,8"/>
+
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
+                    <TextBlock Text="Ctrl + Alt + Z" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="Toggle zoom in/out" Foreground="#CDD6F4" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
+                    <TextBlock Text="Ctrl + Alt + Scroll" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="Adjust zoom level (while zoomed)" Foreground="#CDD6F4" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
+                    <TextBlock Text="Ctrl + Alt + L" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="Lock/unlock viewport position" Foreground="#CDD6F4" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
+                    <TextBlock Text="Ctrl + Alt + Esc" FontFamily="Consolas" FontSize="13" Foreground="#F38BA8"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="Panic reset (instant zoom out)" Foreground="#CDD6F4" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+
+            <!-- Separator -->
+            <Border Height="1" Background="#30CDD6F4" Margin="0,10,0,16"/>
+
+            <!-- Tools section -->
+            <TextBlock Text="TOOLS" FontSize="11" FontWeight="Bold"
+                       Foreground="#6C7086" Margin="0,0,0,8"/>
+
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
+                    <TextBlock Text="Ctrl + Alt + H" FontFamily="Consolas" FontSize="13" Foreground="#F9E2AF"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="Toggle cursor highlight ring" Foreground="#CDD6F4" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+
+            <!-- Separator -->
+            <Border Height="1" Background="#30CDD6F4" Margin="0,10,0,16"/>
+
+            <!-- Help section -->
+            <TextBlock Text="OTHER" FontSize="11" FontWeight="Bold"
+                       Foreground="#6C7086" Margin="0,0,0,8"/>
+
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
+                    <TextBlock Text="Ctrl + Alt + /" FontFamily="Consolas" FontSize="13" Foreground="#89B4FA"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="Show/hide this help" Foreground="#CDD6F4" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </Grid>
+
+            <!-- Footer -->
+            <TextBlock Text="Click anywhere or press any key to close"
+                       FontSize="11" Foreground="#585B70" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+        </StackPanel>
+    </Border>
+</Window>

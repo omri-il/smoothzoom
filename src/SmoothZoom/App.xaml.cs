@@ -17,6 +17,7 @@ public partial class App : System.Windows.Application
     private MagnificationService? _magnification;
     private ZoomController? _zoomController;
     private CursorHighlightService? _cursorHighlight;
+    private HelpOverlay? _helpOverlay;
     private AppSettings _settings = new();
 
     protected override void OnStartup(StartupEventArgs e)
@@ -82,6 +83,7 @@ public partial class App : System.Windows.Application
     private void SetupTrayIcon()
     {
         var contextMenu = new WinForms.ContextMenuStrip();
+        contextMenu.Items.Add("Help (Ctrl+Alt+/)", null, (_, _) => OnHelpToggle());
         contextMenu.Items.Add("Settings", null, OnSettingsClicked);
         contextMenu.Items.Add(new WinForms.ToolStripSeparator());
         contextMenu.Items.Add("Quit", null, OnQuitClicked);
@@ -135,6 +137,21 @@ public partial class App : System.Windows.Application
         _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
         _keyboardHook.ScrollWheel += (direction) => _zoomController?.AdjustZoom(direction);
         _keyboardHook.HighlightTogglePressed += () => _cursorHighlight?.Toggle();
+        _keyboardHook.HelpTogglePressed += OnHelpToggle;
+    }
+
+    private void OnHelpToggle()
+    {
+        if (_helpOverlay != null)
+        {
+            _helpOverlay.Close();
+            _helpOverlay = null;
+            return;
+        }
+
+        _helpOverlay = new HelpOverlay();
+        _helpOverlay.Closed += (_, _) => _helpOverlay = null;
+        _helpOverlay.Show();
     }
 
     private void OnSettingsClicked(object? sender, EventArgs e)
