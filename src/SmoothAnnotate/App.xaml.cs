@@ -65,7 +65,7 @@ public partial class App : System.Windows.Application
             var laserColor = (Color)ColorConverter.ConvertFromString(_settings.LaserColor);
             var laserService = new LaserService(_overlayWindow.FindName("DrawCanvas") as System.Windows.Controls.InkCanvas
                 ?? throw new InvalidOperationException("DrawCanvas not found"),
-                _settings.LaserFadeMs, laserColor);
+                _settings.LaserFadeMs, laserColor, _settings.LaserSize);
             var stopwatchService = new StopwatchService();
             _overlayWindow.InitializeServices(laserService, stopwatchService);
             Log("Services initialized");

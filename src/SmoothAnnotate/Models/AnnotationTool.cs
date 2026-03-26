@@ -10,5 +10,6 @@ public enum AnnotationTool
     Arrow,
     Rectangle,
     Circle,
-    Text
+    Text,
+    Select
 }

@@ -34,6 +34,10 @@ public partial class OverlayWindow : Window
     private Shape? _shapePreview;
     private bool _isDrawingShape;
 
+    // Select/Move state
+    private UIElement? _draggedElement;
+    private Point _dragOffset;
+
     // Text tool state
     private TextBox? _activeTextBox;
     private double _textSize = 32; // Medium default
@@ -362,7 +366,7 @@ public partial class OverlayWindow : Window
     }
 
     private bool IsShapeTool(AnnotationTool tool) =>
-        tool is AnnotationTool.Arrow or AnnotationTool.Rectangle or AnnotationTool.Circle or AnnotationTool.Text;
+        tool is AnnotationTool.Arrow or AnnotationTool.Rectangle or AnnotationTool.Circle or AnnotationTool.Text or AnnotationTool.Select;
 
     private void SetTool(AnnotationTool tool)
     {
@@ -374,13 +378,27 @@ public partial class OverlayWindow : Window
 
         if (IsShapeTool(tool))
         {
-            // Shape tools: disable InkCanvas, enable ShapeCanvas
-            DrawCanvas.EditingMode = InkCanvasEditingMode.None;
-            ShapeCanvas.IsHitTestVisible = true;
             _laserService?.Stop();
 
-            DrawCanvas.Cursor = tool == AnnotationTool.Text ? Cursors.IBeam : Cursors.Cross;
-            ShapeCanvas.Cursor = tool == AnnotationTool.Text ? Cursors.IBeam : Cursors.Cross;
+            if (tool == AnnotationTool.Select)
+            {
+                // Select mode: InkCanvas handles stroke selection, ShapeCanvas handles shape dragging
+                DrawCanvas.EditingMode = InkCanvasEditingMode.Select;
+                ShapeCanvas.IsHitTestVisible = true;
+                DrawCanvas.Cursor = Cursors.Hand;
+                ShapeCanvas.Cursor = Cursors.Hand;
+                // Make shape children hit-testable for dragging
+                foreach (UIElement child in ShapeCanvas.Children)
+                    child.IsHitTestVisible = true;
+            }
+            else
+            {
+                // Shape drawing tools: disable InkCanvas, enable ShapeCanvas
+                DrawCanvas.EditingMode = InkCanvasEditingMode.None;
+                ShapeCanvas.IsHitTestVisible = true;
+                DrawCanvas.Cursor = tool == AnnotationTool.Text ? Cursors.IBeam : Cursors.Cross;
+                ShapeCanvas.Cursor = tool == AnnotationTool.Text ? Cursors.IBeam : Cursors.Cross;
+            }
         }
         else
         {
@@ -437,11 +455,14 @@ public partial class OverlayWindow : Window
 
                 case AnnotationTool.Laser:
                     DrawCanvas.EditingMode = InkCanvasEditingMode.Ink;
+                    // Draw the GLOW as the live stroke (wide, semi-transparent)
+                    // Core stroke is added on StrokeCollected by LaserService
+                    double glowWidth = _settings.LaserSize * 3.5;
                     DrawCanvas.DefaultDrawingAttributes = new DrawingAttributes
                     {
-                        Color = _currentColor,
-                        Width = _settings.LaserSize,
-                        Height = _settings.LaserSize,
+                        Color = Color.FromArgb(80, _currentColor.R, _currentColor.G, _currentColor.B),
+                        Width = glowWidth,
+                        Height = glowWidth,
                         FitToCurve = true,
                         StylusTip = StylusTip.Ellipse,
                         IgnorePressure = true
@@ -490,6 +511,33 @@ public partial class OverlayWindow : Window
         if (_currentTool == AnnotationTool.Text)
         {
             PlaceTextBox(e.GetPosition(ShapeCanvas));
+            return;
+        }
+
+        // Select mode: try to grab an existing shape
+        if (_currentTool == AnnotationTool.Select)
+        {
+            var pos = e.GetPosition(ShapeCanvas);
+            var hit = ShapeCanvas.InputHitTest(pos) as UIElement;
+            if (hit != null && hit != ShapeCanvas)
+            {
+                // Walk up to find the direct child of ShapeCanvas
+                var element = hit;
+                while (element != null && VisualTreeHelper.GetParent(element) as Canvas != ShapeCanvas)
+                    element = VisualTreeHelper.GetParent(element) as UIElement;
+
+                if (element != null)
+                {
+                    _draggedElement = element;
+                    double left = Canvas.GetLeft(element);
+                    double top = Canvas.GetTop(element);
+                    if (double.IsNaN(left)) left = 0;
+                    if (double.IsNaN(top)) top = 0;
+                    _dragOffset = new Point(pos.X - left, pos.Y - top);
+                    ShapeCanvas.CaptureMouse();
+                    e.Handled = true;
+                }
+            }
             return;
         }
 
@@ -544,6 +592,15 @@ public partial class OverlayWindow : Window
 
     private void OnShapeMouseMove(object sender, MouseEventArgs e)
     {
+        // Handle dragging in Select mode
+        if (_draggedElement != null)
+        {
+            var pos = e.GetPosition(ShapeCanvas);
+            Canvas.SetLeft(_draggedElement, pos.X - _dragOffset.X);
+            Canvas.SetTop(_draggedElement, pos.Y - _dragOffset.Y);
+            return;
+        }
+
         if (!_isDrawingShape || _shapePreview == null) return;
 
         var currentPoint = e.GetPosition(ShapeCanvas);
@@ -565,6 +622,14 @@ public partial class OverlayWindow : Window
 
     private void OnShapeMouseUp(object sender, MouseButtonEventArgs e)
     {
+        // End dragging in Select mode
+        if (_draggedElement != null)
+        {
+            _draggedElement = null;
+            ShapeCanvas.ReleaseMouseCapture();
+            return;
+        }
+
         if (!_isDrawingShape) return;
 
         _isDrawingShape = false;

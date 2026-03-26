@@ -44,7 +44,17 @@
                 </Border>
             </Grid>
 
+            <!-- Select/Move Tool -->
+            <Button x:Name="BtnSelect" Tag="Select" Click="ToolButton_Click">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="⇱" FontSize="14" Foreground="#80FFFFFF"
+                               Width="14" TextAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="Select" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
             <!-- Drawing Tools Section -->
+            <Border Height="1" Background="#15FFFFFF" Margin="6,4"/>
             <TextBlock Text="DRAW" FontSize="8" Foreground="#40FFFFFF"
                        FontFamily="Segoe UI" FontWeight="Bold" Margin="10,0,0,3"/>
 

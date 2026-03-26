@@ -28,6 +28,7 @@ public partial class ToolbarWindow : Window
         _colorSwatches = new[] { Color1, Color2, Color3, Color4, Color5 };
         _toolButtons = new Dictionary<AnnotationTool, Button>
         {
+            { AnnotationTool.Select, BtnSelect },
             { AnnotationTool.Pen, BtnPen },
             { AnnotationTool.Highlighter, BtnHighlighter },
             { AnnotationTool.Eraser, BtnEraser },
