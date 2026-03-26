@@ -9,36 +9,37 @@ public class ZoomController : IDisposable
     private readonly DispatcherTimer _timer;
     private readonly Action<bool, User32.RECT> _onZoomStateChanged;
 
-    // State machine
     private enum ZoomState { Idle, Animating, Zoomed }
     private ZoomState _state = ZoomState.Idle;
 
-    // Animation parameters
+    // Animation
     private float _currentScale = 1.0f;
     private float _startScale;
     private float _targetScale = 1.0f;
     private DateTime _animationStart;
     private TimeSpan _animationDuration;
 
-    // Cursor tracking
+    // Viewport position
     private float _smoothX;
     private float _smoothY;
     private User32.RECT _activeMonitorBounds;
     private bool _monitorCaptured;
 
-    // View lock — DEFAULT ON (screen stays fixed, cursor moves freely)
+    // View lock (default ON)
     private bool _viewLocked = true;
 
-    // Configurable settings
+    // Settings
     public float TargetZoomLevel { get; set; } = 2.0f;
     public int ZoomDurationMs { get; set; } = 300;
     public float CursorTrackingSpeed { get; set; } = 0.25f;
 
-    // Zoom limits
+    // Constants
     private const float MinZoom = 1.0f;
     private const float MaxZoom = 6.0f;
     private const float ZoomStep = 0.25f;
-    private const int ScrollAnimationMs = 200; // Smooth ease per scroll notch
+    private const int ScrollAnimationMs = 200;
+    private const float EdgeZone = 80f;    // Pixels from edge where panning starts
+    private const float MaxPanSpeed = 8f;  // Max pixels per frame to pan
 
     public bool IsZoomed => _state != ZoomState.Idle;
 
@@ -62,9 +63,6 @@ public class ZoomController : IDisposable
             AnimateTo(1.0f, ZoomDurationMs);
     }
 
-    /// <summary>
-    /// Scroll to zoom: instant scale change per notch (no animation = no flicker).
-    /// </summary>
     public void ScrollZoom(int direction)
     {
         float newTarget = _targetScale + (direction * ZoomStep);
@@ -73,12 +71,10 @@ public class ZoomController : IDisposable
 
         if (newTarget <= 1.0f)
         {
-            // Smooth zoom out to 1x
             AnimateTo(1.0f, ScrollAnimationMs);
             return;
         }
 
-        // Capture monitor on first zoom
         if (!_monitorCaptured)
         {
             User32.GetCursorPos(out var cursor);
@@ -89,7 +85,6 @@ public class ZoomController : IDisposable
             _viewLocked = true;
         }
 
-        // Smooth ease to target — fullscreen API is GPU-composited so no flicker
         _startScale = _currentScale;
         _targetScale = newTarget;
         _animationStart = DateTime.UtcNow;
@@ -103,19 +98,6 @@ public class ZoomController : IDisposable
     {
         if (_state == ZoomState.Idle) return;
         _viewLocked = !_viewLocked;
-    }
-
-    /// <summary>
-    /// Middle-click drag to pan the viewport. Works even in locked mode.
-    /// Content follows the cursor 1:1 — like grabbing and dragging a map.
-    /// </summary>
-    public void DragPan(int deltaX, int deltaY)
-    {
-        if (_state == ZoomState.Idle) return;
-        // "Grab and drag" feel — content follows the drag direction
-        // like pulling a piece of paper on a desk
-        _smoothX -= deltaX;
-        _smoothY -= deltaY;
     }
 
     public void PanicReset()
@@ -146,7 +128,7 @@ public class ZoomController : IDisposable
         _animationStart = DateTime.UtcNow;
         _animationDuration = TimeSpan.FromMilliseconds(durationMs);
         _state = ZoomState.Animating;
-        _viewLocked = true; // Default: locked view
+        _viewLocked = true;
 
         _timer.Start();
         _onZoomStateChanged(target > 1.0f, _activeMonitorBounds);
@@ -154,7 +136,7 @@ public class ZoomController : IDisposable
 
     private void OnTimerTick(object? sender, EventArgs e)
     {
-        // 1. Update zoom animation (only for Ctrl+Alt+Z toggle, not scroll)
+        // 1. Update zoom animation
         if (_state == ZoomState.Animating)
         {
             float elapsed = (float)(DateTime.UtcNow - _animationStart).TotalMilliseconds;
@@ -180,10 +162,11 @@ public class ZoomController : IDisposable
             }
         }
 
-        // 2. Cursor tracking (only when NOT view-locked)
+        // 2. Cursor tracking or edge panning
         User32.GetCursorPos(out var cursor);
         if (!_viewLocked)
         {
+            // Full cursor tracking mode
             float dx = cursor.X - _smoothX;
             float dy = cursor.Y - _smoothY;
             float distance = MathF.Sqrt(dx * dx + dy * dy);
@@ -199,13 +182,58 @@ public class ZoomController : IDisposable
                 _smoothY += dy * CursorTrackingSpeed;
             }
         }
-        // When view-locked, _smoothX/_smoothY stay where they were captured
+        else
+        {
+            // Locked mode — edge panning when cursor nears screen edge
+            ApplyEdgePan(cursor.X, cursor.Y);
+        }
 
         // 3. Apply transform
         _magnification.SetZoom(_currentScale,
             (int)MathF.Round(_smoothX),
             (int)MathF.Round(_smoothY),
             _activeMonitorBounds);
+    }
+
+    private void ApplyEdgePan(int cursorX, int cursorY)
+    {
+        if (_currentScale <= 1.0f) return;
+
+        int monLeft = _activeMonitorBounds.Left;
+        int monTop = _activeMonitorBounds.Top;
+        int monRight = _activeMonitorBounds.Right;
+        int monBottom = _activeMonitorBounds.Bottom;
+
+        float panX = 0, panY = 0;
+
+        // Left edge
+        if (cursorX < monLeft + EdgeZone)
+        {
+            float proximity = 1f - (cursorX - monLeft) / EdgeZone;
+            panX = -MaxPanSpeed * proximity;
+        }
+        // Right edge
+        else if (cursorX > monRight - EdgeZone)
+        {
+            float proximity = 1f - (monRight - cursorX) / EdgeZone;
+            panX = MaxPanSpeed * proximity;
+        }
+
+        // Top edge
+        if (cursorY < monTop + EdgeZone)
+        {
+            float proximity = 1f - (cursorY - monTop) / EdgeZone;
+            panY = -MaxPanSpeed * proximity;
+        }
+        // Bottom edge
+        else if (cursorY > monBottom - EdgeZone)
+        {
+            float proximity = 1f - (monBottom - cursorY) / EdgeZone;
+            panY = MaxPanSpeed * proximity;
+        }
+
+        _smoothX += panX;
+        _smoothY += panY;
     }
 
     private static float CubicEaseInOut(float t)

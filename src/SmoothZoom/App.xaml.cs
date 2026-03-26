@@ -93,15 +93,22 @@ public partial class App : System.Windows.Application
         };
     }
 
+    private bool _wasZoomed;
+
     private void OnZoomStateChanged(bool isZoomed, User32.RECT activeMonitorBounds)
     {
         UpdateTrayIcon(isZoomed);
 
-        // Freeze other monitors when zooming, unfreeze when done
-        if (isZoomed)
+        if (isZoomed && !_wasZoomed)
+        {
+            // Freeze other monitors BEFORE first zoom frame
             _monitorFreeze?.FreezeOtherMonitors(activeMonitorBounds);
-        else
+        }
+        else if (!isZoomed && _wasZoomed)
+        {
             _monitorFreeze?.UnfreezeAll();
+        }
+        _wasZoomed = isZoomed;
     }
 
     private void SetupTrayIcon()
@@ -160,7 +167,6 @@ public partial class App : System.Windows.Application
         _keyboardHook.PanicResetPressed += () => _zoomController?.PanicReset();
         _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
         _keyboardHook.ScrollWheel += (direction) => _zoomController?.ScrollZoom(direction);
-        _keyboardHook.DragPan += (dx, dy) => _zoomController?.DragPan(dx, dy);
         _keyboardHook.HighlightTogglePressed += () => _cursorHighlight?.Toggle();
         _keyboardHook.HelpTogglePressed += OnHelpToggle;
     }

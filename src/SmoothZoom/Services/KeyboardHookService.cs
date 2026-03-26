@@ -23,11 +23,6 @@ public class KeyboardHookService : IDisposable
     public event Action<int>? ScrollWheel;
     public event Action? HighlightTogglePressed;
     public event Action? HelpTogglePressed;
-    public event Action<int, int>? DragPan; // deltaX, deltaY
-
-    private bool _middleDragging;
-    private int _lastDragX;
-    private int _lastDragY;
 
     public KeyboardHookService()
     {
@@ -128,28 +123,6 @@ public class KeyboardHookService : IDisposable
                     ScrollWheel?.Invoke(delta > 0 ? 1 : -1);
                     return (IntPtr)1;
                 }
-            }
-            else if (msg == User32.WM_MBUTTONDOWN)
-            {
-                var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
-                _middleDragging = true;
-                _lastDragX = mouse.pt.X;
-                _lastDragY = mouse.pt.Y;
-            }
-            else if (msg == User32.WM_MBUTTONUP)
-            {
-                _middleDragging = false;
-            }
-            else if (msg == User32.WM_MOUSEMOVE && _middleDragging)
-            {
-                var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
-                int dx = mouse.pt.X - _lastDragX;
-                int dy = mouse.pt.Y - _lastDragY;
-                _lastDragX = mouse.pt.X;
-                _lastDragY = mouse.pt.Y;
-
-                if (dx != 0 || dy != 0)
-                    DragPan?.Invoke(dx, dy);
             }
         }
 

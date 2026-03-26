@@ -70,9 +70,9 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Background="#30454570" CornerRadius="6" Padding="10,6" HorizontalAlignment="Left">
-                    <TextBlock Text="Middle-click + Drag" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
+                    <TextBlock Text="Cursor near edge" FontFamily="Consolas" FontSize="13" Foreground="#A6E3A1"/>
                 </Border>
-                <TextBlock Grid.Column="1" Text="Pan the zoomed view" Foreground="#CDD6F4" FontSize="13"
+                <TextBlock Grid.Column="1" Text="Auto-pan the zoomed view" Foreground="#CDD6F4" FontSize="13"
                            VerticalAlignment="Center" Margin="12,0,0,0"/>
             </Grid>
 
