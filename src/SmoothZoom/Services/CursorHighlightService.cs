@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using SmoothZoom.Native;
@@ -16,7 +15,8 @@ public class CursorHighlightService : IDisposable
     private bool _isActive;
 
     // Configurable
-    public double RingSize { get; set; } = 40;
+    public double RingSize { get; set; } = 50;
+    public double RingThickness { get; set; } = 3;
 
     public CursorHighlightService()
     {
@@ -41,9 +41,7 @@ public class CursorHighlightService : IDisposable
     {
         if (_overlayWindow != null) return;
 
-        // The glow needs to be larger than the ring to avoid clipping
-        double glowSize = RingSize * 3;
-        double windowSize = glowSize + 20; // padding
+        double windowSize = RingSize + RingThickness * 2 + 4; // small padding
 
         _overlayWindow = new Window
         {
@@ -59,51 +57,24 @@ public class CursorHighlightService : IDisposable
 
         var canvas = new Canvas { Width = windowSize, Height = windowSize };
 
-        // Outer soft glow — large radial gradient
-        var outerGlow = new Ellipse
+        // Clean crisp ring — like the blue circle reference
+        var ring = new Ellipse
         {
-            Width = glowSize,
-            Height = glowSize,
-            Fill = new RadialGradientBrush
-            {
-                GradientStops = new GradientStopCollection
-                {
-                    new(System.Windows.Media.Color.FromArgb(70, 255, 230, 80), 0.0),   // Warm center
-                    new(System.Windows.Media.Color.FromArgb(40, 255, 220, 50), 0.3),    // Yellow mid
-                    new(System.Windows.Media.Color.FromArgb(15, 255, 200, 30), 0.6),    // Fading
-                    new(System.Windows.Media.Color.FromArgb(0, 255, 200, 0), 1.0),      // Transparent edge
-                }
-            },
-            Stroke = null,
+            Width = RingSize,
+            Height = RingSize,
+            Stroke = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(220, 65, 130, 220)), // Clean blue
+            StrokeThickness = RingThickness,
+            Fill = System.Windows.Media.Brushes.Transparent,
         };
-        Canvas.SetLeft(outerGlow, (windowSize - glowSize) / 2);
-        Canvas.SetTop(outerGlow, (windowSize - glowSize) / 2);
-        canvas.Children.Add(outerGlow);
 
-        // Inner bright core — smaller, more opaque
-        double coreSize = RingSize * 1.2;
-        var innerCore = new Ellipse
-        {
-            Width = coreSize,
-            Height = coreSize,
-            Fill = new RadialGradientBrush
-            {
-                GradientStops = new GradientStopCollection
-                {
-                    new(System.Windows.Media.Color.FromArgb(50, 255, 255, 200), 0.0),   // Bright white-yellow center
-                    new(System.Windows.Media.Color.FromArgb(30, 255, 240, 100), 0.5),   // Warm yellow
-                    new(System.Windows.Media.Color.FromArgb(0, 255, 220, 50), 1.0),     // Transparent
-                }
-            },
-            Stroke = null,
-            Effect = new BlurEffect { Radius = 5 },
-        };
-        Canvas.SetLeft(innerCore, (windowSize - coreSize) / 2);
-        Canvas.SetTop(innerCore, (windowSize - coreSize) / 2);
-        canvas.Children.Add(innerCore);
+        // Anti-alias the ring
+        RenderOptions.SetEdgeMode(ring, EdgeMode.Unspecified);
 
-        // Enable anti-aliasing
-        RenderOptions.SetEdgeMode(canvas, EdgeMode.Unspecified);
+        double offset = (windowSize - RingSize) / 2;
+        Canvas.SetLeft(ring, offset);
+        Canvas.SetTop(ring, offset);
+        canvas.Children.Add(ring);
 
         _overlayWindow.Content = canvas;
         _overlayWindow.Show();

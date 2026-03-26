@@ -32,7 +32,7 @@ public class ZoomController : IDisposable
     // Configurable settings
     public float TargetZoomLevel { get; set; } = 2.0f;
     public int ZoomDurationMs { get; set; } = 300;
-    public float CursorTrackingSpeed { get; set; } = 0.15f;
+    public float CursorTrackingSpeed { get; set; } = 0.25f;
 
     // Zoom limits
     private const float MinZoom = 1.0f;
@@ -49,7 +49,7 @@ public class ZoomController : IDisposable
 
         _timer = new DispatcherTimer(DispatcherPriority.Render)
         {
-            Interval = TimeSpan.FromMilliseconds(16) // ~60fps
+            Interval = TimeSpan.FromMilliseconds(8) // ~120fps for smoother panning
         };
         _timer.Tick += OnTimerTick;
     }

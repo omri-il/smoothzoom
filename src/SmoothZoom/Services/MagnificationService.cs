@@ -74,7 +74,8 @@ public class MagnificationService : IDisposable
         };
 
         MagnificationApi.MagSetWindowSource(_magnifierHwnd, sourceRect);
-        User32.InvalidateRect(_magnifierHwnd, IntPtr.Zero, true);
+        // InvalidateRect with bErase=false — just repaint without erasing background
+        User32.InvalidateRect(_magnifierHwnd, IntPtr.Zero, false);
     }
 
     public void Reset()
