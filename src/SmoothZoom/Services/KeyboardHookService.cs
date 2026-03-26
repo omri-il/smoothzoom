@@ -23,6 +23,11 @@ public class KeyboardHookService : IDisposable
     public event Action<int>? ScrollWheel;
     public event Action? HighlightTogglePressed;
     public event Action? HelpTogglePressed;
+    public event Action<int, int>? DragPan; // deltaX, deltaY
+
+    private bool _middleDragging;
+    private int _lastDragX;
+    private int _lastDragY;
 
     public KeyboardHookService()
     {
@@ -86,6 +91,7 @@ public class KeyboardHookService : IDisposable
 
             if (isKeyDown && _ctrlPressed && _altPressed)
             {
+                bool handled = true;
                 switch (kbd.vkCode)
                 {
                     case 0x5A: ToggleZoomPressed?.Invoke(); break;
@@ -93,7 +99,10 @@ public class KeyboardHookService : IDisposable
                     case 0x4C: ViewLockPressed?.Invoke(); break;
                     case 0x48: HighlightTogglePressed?.Invoke(); break;
                     case 0xBF: HelpTogglePressed?.Invoke(); break;
+                    default: handled = false; break;
                 }
+                // Swallow the key to prevent Windows "ding" sound
+                if (handled) return (IntPtr)1;
             }
         }
 
@@ -102,19 +111,45 @@ public class KeyboardHookService : IDisposable
 
     private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && wParam == User32.WM_MOUSEWHEEL)
+        if (nCode >= 0)
         {
-            var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
-            int delta = (short)(mouse.mouseData >> 16);
+            int msg = (int)wParam;
 
-            bool ctrlHeld = (User32.GetAsyncKeyState(User32.VK_CONTROL) & 0x8000) != 0;
-            bool altHeld = (User32.GetAsyncKeyState(User32.VK_MENU) & 0x8000) != 0;
-
-            if (ctrlHeld && altHeld)
+            if (msg == User32.WM_MOUSEWHEEL)
             {
-                ScrollWheel?.Invoke(delta > 0 ? 1 : -1);
-                // Swallow the event — don't pass to Windows (prevents folder zoom conflict)
-                return (IntPtr)1;
+                var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
+                int delta = (short)(mouse.mouseData >> 16);
+
+                bool ctrlHeld = (User32.GetAsyncKeyState(User32.VK_CONTROL) & 0x8000) != 0;
+                bool altHeld = (User32.GetAsyncKeyState(User32.VK_MENU) & 0x8000) != 0;
+
+                if (ctrlHeld && altHeld)
+                {
+                    ScrollWheel?.Invoke(delta > 0 ? 1 : -1);
+                    return (IntPtr)1;
+                }
+            }
+            else if (msg == User32.WM_MBUTTONDOWN)
+            {
+                var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
+                _middleDragging = true;
+                _lastDragX = mouse.pt.X;
+                _lastDragY = mouse.pt.Y;
+            }
+            else if (msg == User32.WM_MBUTTONUP)
+            {
+                _middleDragging = false;
+            }
+            else if (msg == User32.WM_MOUSEMOVE && _middleDragging)
+            {
+                var mouse = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
+                int dx = mouse.pt.X - _lastDragX;
+                int dy = mouse.pt.Y - _lastDragY;
+                _lastDragX = mouse.pt.X;
+                _lastDragY = mouse.pt.Y;
+
+                if (dx != 0 || dy != 0)
+                    DragPan?.Invoke(dx, dy);
             }
         }
 

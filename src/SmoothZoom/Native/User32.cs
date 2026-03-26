@@ -73,6 +73,9 @@ public static class User32
     public const int WM_SYSKEYDOWN = 0x0104;
     public const int WM_SYSKEYUP = 0x0105;
     public const int WM_MOUSEWHEEL = 0x020A;
+    public const int WM_MBUTTONDOWN = 0x0207;
+    public const int WM_MBUTTONUP = 0x0208;
+    public const int WM_MOUSEMOVE = 0x0200;
     public const int VK_CONTROL = 0x11;
     public const int VK_MENU = 0x12;
     public const uint MONITOR_DEFAULTTONEAREST = 2;

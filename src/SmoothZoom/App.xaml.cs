@@ -152,6 +152,7 @@ public partial class App : System.Windows.Application
         _keyboardHook.PanicResetPressed += () => _zoomController?.PanicReset();
         _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
         _keyboardHook.ScrollWheel += (direction) => _zoomController?.ScrollZoom(direction);
+        _keyboardHook.DragPan += (dx, dy) => _zoomController?.DragPan(dx, dy);
         _keyboardHook.HighlightTogglePressed += () => _cursorHighlight?.Toggle();
         _keyboardHook.HelpTogglePressed += OnHelpToggle;
     }
