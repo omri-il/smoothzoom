@@ -70,6 +70,16 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 | F10 | Clear all |
 | F11 | Laser pointer |
 | F12 | Timer start/pause (double-tap = reset) |
+| Ctrl+0 | Mouse mode (click-through, toolbar collapses to dot) |
+| Ctrl+1 | Pen |
+| Ctrl+2 | Highlighter |
+| Ctrl+3 | Laser |
+| Ctrl+4 | Eraser |
+| Ctrl+5 | Arrow |
+| Ctrl+6 | Rectangle |
+| Ctrl+7 | Circle |
+| Ctrl+8 | Text |
+| Ctrl+V | Paste image from clipboard |
 | Ctrl+Alt+A | Arrow tool |
 | Ctrl+Alt+R | Rectangle tool |
 | Ctrl+Alt+O | Circle/Oval tool |
@@ -78,17 +88,20 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 | Ctrl+Alt+1-5 | Colors: Red, Blue, Green, White, Yellow |
 
 ### Toolbar Features
-- **Select/Move** - Drag ink strokes and shapes to reposition
-- **Pen** - Pressure-sensitive Wacom support, subtle shadow
-- **Highlighter** - Semi-transparent yellow, rectangle tip
-- **Eraser** - Stroke-level removal
-- **Laser** - Single-stroke fade (no timing gap), configurable fade duration
-- **Shapes** - Arrow (sharp pointy head), Rectangle, Circle — all with drop shadows
-- **Text** - Hebrew RTL auto-detect, 4 sizes (Small 24 / Medium 32 / Large 48 / XL 72)
-- **Color picker** - 5 colors with glow swatches
-- **Confetti** - 60-particle burst with physics (gravity, spin, fade)
-- **Timer** - Stopwatch HUD, double-tap to reset
-- **Close** - X button in toolbar header
+- **Excalidraw-style horizontal bar** at top-center of screen (draggable)
+- **Mouse/Pointer** — exits draw mode, toolbar collapses to small floating dot; click dot to re-expand
+- **Select/Move** — drag ink strokes and shapes to reposition; arrows move as one piece (line + head)
+- **Pen** — pressure-sensitive Wacom support, subtle shadow
+- **Highlighter** — semi-transparent yellow, rectangle tip
+- **Eraser** — stroke-level removal
+- **Laser** — single-stroke fade with glow, configurable fade duration
+- **Shapes** — Arrow (sharp pointy head), Rectangle, Circle — all with drop shadows
+- **Text** — Hebrew RTL auto-detect, 4 sizes (Small 24 / Medium 32 / Large 48 / XL 72)
+- **Color picker** — 5 colors with glow swatches
+- **Confetti** — 60-particle burst with physics (gravity, spin, fade)
+- **Timer** — Stopwatch HUD, double-tap to reset
+- **Close** — X button in toolbar header
+- **Paste image** — Ctrl+V pastes clipboard image as draggable element on overlay
 
 ### Structure
 ```
@@ -97,28 +110,30 @@ src/SmoothAnnotate/
 ├── GlobalUsings.cs            # Resolves WPF/WinForms type ambiguities
 ├── Models/
 │   ├── AnnotationSettings.cs  # Settings POCO
-│   └── AnnotationTool.cs      # Tool enum
+│   └── AnnotationTool.cs      # Tool enum (None/Pen/Highlighter/Eraser/Laser/Arrow/Rectangle/Circle/Text/Select)
 ├── Native/
-│   ├── User32.cs              # P/Invoke: hooks, window styles, monitors
+│   ├── User32.cs              # P/Invoke: hooks, window styles, monitors, SetWindowPos
 │   └── Kernel32.cs            # P/Invoke: GetModuleHandle
 ├── Services/
-│   ├── KeyboardHookService.cs # F9-F12 + Ctrl+Alt combos
-│   ├── LaserService.cs        # Laser fade-out timer
+│   ├── KeyboardHookService.cs # F9-F12, Ctrl+0-8, Ctrl+V, Ctrl+Alt combos
+│   ├── LaserService.cs        # Laser fade-out timer (single-stroke approach)
 │   ├── StopwatchService.cs    # Timer with double-tap reset
 │   ├── ConfettiService.cs     # Particle physics confetti
-│   ├── OverlayService.cs      # Win32 click-through toggling
+│   ├── OverlayService.cs      # Win32 click-through toggling, z-order
 │   └── SettingsService.cs     # JSON persistence
 └── Views/
-    ├── OverlayWindow.xaml(.cs)  # Fullscreen transparent overlay
-    ├── ToolbarWindow.xaml(.cs)  # Floating dark toolbar (draggable)
+    ├── OverlayWindow.xaml(.cs)  # Fullscreen transparent overlay (InkCanvas + ShapeCanvas + ConfettiCanvas)
+    ├── ToolbarWindow.xaml(.cs)  # Horizontal dark toolbar (draggable, collapsible to dot)
     └── ToastWindow.xaml(.cs)    # Mode indicator popup
 ```
 
 ### Key Technical Patterns
 - **Click-through overlay:** `WS_EX_TRANSPARENT` toggled via Win32 `SetWindowLong`. Background: `Transparent` when click-through, `#01000000` (alpha=1) when drawing.
 - **Toolbar clickable in draw mode:** 50ms `DispatcherTimer` checks cursor position via `GetCursorPos`, temporarily sets overlay click-through when hovering over toolbar. DPI-aware using `PresentationSource.TransformToDevice`.
-- **Single-monitor overlay:** `MonitorFromPoint` + `GetMonitorInfo` constrains overlay to cursor's monitor when entering draw mode. Expands back to virtual screen on exit.
+- **Toolbar collapse:** When mouse mode is selected, toolbar collapses to a 42px floating dot. Click dot to re-expand and return to Pen mode.
+- **Single-monitor overlay:** `MonitorFromPoint` + `GetMonitorInfo` constrains overlay to cursor's monitor when entering draw mode.
 - **WS_EX_NOACTIVATE** on overlay so toolbar keeps focus.
+- **Arrow pairing:** `_arrowPairs` dictionary maps Line↔Polygon so Select tool moves both together.
 - **Delegate pinning:** Hook delegates stored as class fields to prevent GC collection.
 
 ### Settings
@@ -126,6 +141,13 @@ Stored at `%APPDATA%\SmoothAnnotate\settings.json`
 
 ### Debug Log
 Written to `%LOCALAPPDATA%\SmoothAnnotate\debug.log`
+
+### Planned (Tier 1 — not yet built)
+1. **Undo/Redo** (Ctrl+Z / Ctrl+Y) — UndoService with combined ink+shape stack
+2. **Pen size toggle** — Thin/Medium/Thick buttons in toolbar
+3. **Filled shapes** — Outline / Tinted / Solid fill mode for Rect + Circle
+4. **Export PNG** (Ctrl+E) — renders annotations to clipboard as transparent PNG
+5. **10 colors** — adds Orange, Pink, Purple, Teal, Gray to palette
 
 ---
 
@@ -150,4 +172,4 @@ start src/SmoothAnnotate/bin/Debug/net8.0-windows/SmoothAnnotate.exe
 - **DPI awareness:** PerMonitorV2 via ApplicationHighDpiMode project property
 - **Easing:** Cubic ease-in-out for zoom animation
 - **Cursor tracking:** Lerp with adaptive snapping (eliminates sub-pixel jitter when still)
-- **No hotkey conflicts:** SmoothZoom uses Ctrl+Alt, SmoothAnnotate uses F-keys + Ctrl+Alt (different letters)
+- **No hotkey conflicts:** SmoothZoom uses Ctrl+Alt, SmoothAnnotate uses F-keys + Ctrl+number (different patterns)
