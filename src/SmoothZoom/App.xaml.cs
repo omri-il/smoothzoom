@@ -17,6 +17,7 @@ public partial class App : System.Windows.Application
     private MagnificationService? _magnification;
     private ZoomController? _zoomController;
     private CursorHighlightService? _cursorHighlight;
+    private ClickTranslationService? _clickTranslation;
     private HelpOverlay? _helpOverlay;
     private AppSettings _settings = new();
 
@@ -50,6 +51,7 @@ public partial class App : System.Windows.Application
         _zoomController = new ZoomController(_magnification, OnZoomStateChanged);
         _cursorHighlight = new CursorHighlightService();
         _cursorHighlight.SetMagnificationService(_magnification);
+        _clickTranslation = new ClickTranslationService(_magnification);
         ApplySettings();
 
         SetupTrayIcon();
@@ -148,14 +150,19 @@ public partial class App : System.Windows.Application
     private void SetupKeyboardHook()
     {
         _keyboardHook = new KeyboardHookService();
-        _keyboardHook.ToggleZoomPressed += () => _zoomController?.Toggle();
-        _keyboardHook.PanicResetPressed += () => _zoomController?.PanicReset();
-        _keyboardHook.ViewLockPressed += () => _zoomController?.ToggleViewLock();
-        _keyboardHook.ZoomInStepPressed += () => _zoomController?.ZoomInStep();
-        _keyboardHook.ZoomOutStepPressed += () => _zoomController?.ZoomOutStep();
-        _keyboardHook.MiddleButtonChanged += (pressed) => _zoomController?.SetMiddleDragging(pressed);
-        _keyboardHook.HighlightTogglePressed += () => _cursorHighlight?.Toggle();
-        _keyboardHook.HelpTogglePressed += OnHelpToggle;
+        if (_clickTranslation != null)
+            _keyboardHook.SetClickTranslation(_clickTranslation);
+        // Dispatch all hook events to the UI thread — hook callbacks fire on the
+        // low-level hook thread, not the WPF dispatcher thread, which causes race
+        // conditions with the DispatcherTimer reading/writing ZoomController state.
+        _keyboardHook.ToggleZoomPressed      += () => Dispatcher.BeginInvoke(() => _zoomController?.Toggle());
+        _keyboardHook.PanicResetPressed      += () => Dispatcher.BeginInvoke(() => _zoomController?.PanicReset());
+        _keyboardHook.ViewLockPressed        += () => Dispatcher.BeginInvoke(() => _zoomController?.ToggleViewLock());
+        _keyboardHook.ZoomInStepPressed      += () => Dispatcher.BeginInvoke(() => _zoomController?.ZoomInStep());
+        _keyboardHook.ZoomOutStepPressed     += () => Dispatcher.BeginInvoke(() => _zoomController?.ZoomOutStep());
+        _keyboardHook.MiddleButtonChanged    += (p)  => Dispatcher.BeginInvoke(() => _zoomController?.SetMiddleDragging(p));
+        _keyboardHook.HighlightTogglePressed += () => Dispatcher.BeginInvoke(() => _cursorHighlight?.Toggle());
+        _keyboardHook.HelpTogglePressed      += () => Dispatcher.BeginInvoke(OnHelpToggle);
     }
 
     private void OnHelpToggle()

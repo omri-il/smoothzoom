@@ -23,6 +23,9 @@ public static class User32
 
     // Cursor & monitor
     [DllImport("user32.dll")]
+    public static extern int ShowCursor([MarshalAs(UnmanagedType.Bool)] bool bShow);
+
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
@@ -63,7 +66,22 @@ public static class User32
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool UpdateWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindow(IntPtr hwnd);
+
+    // SendInput for click translation
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetCursorPos(int X, int Y);
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
 
     // Hook constants
     public const int WH_KEYBOARD_LL = 13;
@@ -73,9 +91,29 @@ public static class User32
     public const int WM_SYSKEYDOWN = 0x0104;
     public const int WM_SYSKEYUP = 0x0105;
     public const int WM_MOUSEWHEEL = 0x020A;
+    public const int WM_LBUTTONDOWN = 0x0201;
+    public const int WM_LBUTTONUP = 0x0202;
+    public const int WM_LBUTTONDBLCLK = 0x0203;
+    public const int WM_RBUTTONDOWN = 0x0204;
+    public const int WM_RBUTTONUP = 0x0205;
+    public const int WM_RBUTTONDBLCLK = 0x0206;
     public const int WM_MBUTTONDOWN = 0x0207;
     public const int WM_MBUTTONUP = 0x0208;
     public const int WM_MOUSEMOVE = 0x0200;
+
+    // SendInput constants
+    public const uint INPUT_MOUSE = 0;
+    public const uint MOUSEEVENTF_MOVE = 0x0001;
+    public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    public const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    public const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+    public const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
+    public const uint MOUSEEVENTF_VIRTUALDESK = 0x4000;
+    public const int SM_CXVIRTUALSCREEN = 78;
+    public const int SM_CYVIRTUALSCREEN = 79;
+    public const int SM_XVIRTUALSCREEN = 76;
+    public const int SM_YVIRTUALSCREEN = 77;
     public const int VK_CONTROL = 0x11;
     public const int VK_MENU = 0x12;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
@@ -125,6 +163,24 @@ public static class User32
         public POINT pt;
         public int mouseData;
         public uint flags, time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct INPUT
+    {
+        public uint type;
+        public MOUSEINPUT mi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public int mouseData;
+        public uint dwFlags;
+        public uint time;
         public IntPtr dwExtraInfo;
     }
 }

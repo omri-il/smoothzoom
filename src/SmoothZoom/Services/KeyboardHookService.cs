@@ -14,9 +14,6 @@ public class KeyboardHookService : IDisposable
     private readonly User32.LowLevelKeyboardProc _kbHookProc;
     private readonly User32.LowLevelMouseProc _mouseHookProc;
 
-    private bool _ctrlPressed;
-    private bool _altPressed;
-
     public event Action? ToggleZoomPressed;
     public event Action? PanicResetPressed;
     public event Action? ViewLockPressed;
@@ -25,6 +22,13 @@ public class KeyboardHookService : IDisposable
     public event Action? HighlightTogglePressed;
     public event Action? HelpTogglePressed;
     public event Action<bool>? MiddleButtonChanged;
+
+    private ClickTranslationService? _clickTranslation;
+
+    public void SetClickTranslation(ClickTranslationService service)
+    {
+        _clickTranslation = service;
+    }
 
     public KeyboardHookService()
     {
@@ -58,7 +62,6 @@ public class KeyboardHookService : IDisposable
 
     private void ReinstallHooks()
     {
-        // Unhook and re-hook to recover from Windows silently removing hooks
         if (_kbHookId != IntPtr.Zero)
             User32.UnhookWindowsHookEx(_kbHookId);
         if (_mouseHookId != IntPtr.Zero)
@@ -69,45 +72,39 @@ public class KeyboardHookService : IDisposable
         InstallHooks();
     }
 
+    /// <summary>
+    /// Check modifier state in real-time — never stale, never blocks keyboard.
+    /// </summary>
+    private static bool IsCtrlHeld() => (User32.GetAsyncKeyState(User32.VK_CONTROL) & 0x8000) != 0;
+    private static bool IsAltHeld() => (User32.GetAsyncKeyState(User32.VK_MENU) & 0x8000) != 0;
+
     private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0)
         {
-            var kbd = Marshal.PtrToStructure<User32.KBDLLHOOKSTRUCT>(lParam);
             bool isKeyDown = wParam == User32.WM_KEYDOWN || wParam == User32.WM_SYSKEYDOWN;
 
-            switch (kbd.vkCode)
+            if (isKeyDown && IsCtrlHeld() && IsAltHeld())
             {
-                case 0xA2 or 0xA3:
-                    _ctrlPressed = isKeyDown;
-                    break;
-                case 0xA4 or 0xA5:
-                    _altPressed = isKeyDown;
-                    // Swallow Alt key when Ctrl is also held (prevents system menu beep)
-                    if (_ctrlPressed)
-                        return (IntPtr)1;
-                    break;
-            }
-
-            if (isKeyDown && _ctrlPressed && _altPressed)
-            {
+                var kbd = Marshal.PtrToStructure<User32.KBDLLHOOKSTRUCT>(lParam);
                 bool handled = true;
                 switch (kbd.vkCode)
                 {
-                    case 0x5A: ToggleZoomPressed?.Invoke(); break;
-                    case 0x1B: PanicResetPressed?.Invoke(); break;
-                    case 0x4C: ViewLockPressed?.Invoke(); break;
-                    case 0x48: HighlightTogglePressed?.Invoke(); break;
-                    case 0xBF: HelpTogglePressed?.Invoke(); break;
-                    case 0xBB: ZoomInStepPressed?.Invoke(); break;  // VK_OEM_PLUS (=/+)
-                    case 0xBD: ZoomOutStepPressed?.Invoke(); break; // VK_OEM_MINUS (-/_)
+                    case 0x5A: ToggleZoomPressed?.Invoke(); break;       // Z
+                    case 0x1B: PanicResetPressed?.Invoke(); break;       // Esc
+                    case 0x4C: ViewLockPressed?.Invoke(); break;         // L
+                    case 0x48: HighlightTogglePressed?.Invoke(); break;  // H
+                    case 0xBF: HelpTogglePressed?.Invoke(); break;       // /
+                    case 0xBB: ZoomInStepPressed?.Invoke(); break;       // =/+
+                    case 0xBD: ZoomOutStepPressed?.Invoke(); break;      // -/_
                     default: handled = false; break;
                 }
-                // Swallow the key to prevent Windows "ding" sound
+                // Only swallow the action key (Z, H, L, etc.) — NEVER swallow Ctrl or Alt
                 if (handled) return (IntPtr)1;
             }
         }
 
+        // Always pass through — never block the keyboard
         return User32.CallNextHookEx(_kbHookId, nCode, wParam, lParam);
     }
 
@@ -117,6 +114,7 @@ public class KeyboardHookService : IDisposable
         {
             int msg = (int)wParam;
 
+            // Middle button: pan/drag control — never translated
             if (msg == User32.WM_MBUTTONDOWN)
             {
                 MiddleButtonChanged?.Invoke(true);
@@ -124,6 +122,14 @@ public class KeyboardHookService : IDisposable
             else if (msg == User32.WM_MBUTTONUP)
             {
                 MiddleButtonChanged?.Invoke(false);
+            }
+
+            // Click translation for windowed magnifier
+            if (_clickTranslation != null)
+            {
+                var hookData = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
+                if (_clickTranslation.TryTranslateClick(msg, hookData))
+                    return (IntPtr)1; // Swallow the original click
             }
         }
 
