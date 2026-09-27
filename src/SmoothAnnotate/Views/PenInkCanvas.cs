@@ -109,7 +109,14 @@ public class PenInkCanvas : InkCanvas
     {
         if (e.StylusDevice is not { } device || device.TabletDevice?.Type != TabletDeviceType.Touch)
             return false;
-        if (down) _ignored[device.Id] = PenIsNear;
+        if (down)
+        {
+            _ignored[device.Id] = PenIsNear;
+            // Only the ignored ones: "my finger doesn't draw" should be answerable from the log
+            if (_ignored[device.Id])
+                App.Log($"touch ignored, pen near (in range: {_penInRange}, "
+                        + $"last seen {Environment.TickCount64 - Interlocked.Read(ref _penSeenAt)} ms ago)");
+        }
         return _ignored.TryGetValue(device.Id, out var ignore) && ignore;
     }
 

@@ -164,7 +164,9 @@ Stored at `%APPDATA%\SmoothAnnotate\settings.json`. `HideToolbarWhenIdle` (defau
 and `PassThroughWindowTitle` — see "Pen and touch" below.
 
 ### Debug Log
-Written to `%LOCALAPPDATA%\SmoothAnnotate\debug.log`
+Written to `%LOCALAPPDATA%\SmoothAnnotate\debug.log`. It is cleared on start. A touch that
+palm rejection threw away logs `touch ignored, pen near (in range: …, last seen … ms ago)`,
+so "my finger doesn't draw" is answered there first.
 
 ### Planned (Tier 1 — not yet built)
 1. **Undo/Redo** (Ctrl+Z / Ctrl+Y) — UndoService with combined ink+shape stack
@@ -259,6 +261,32 @@ callers at once never see "pipe busy".
   per-machine value, never a code default.
 - HP's F-keys are media keys unless Fn is held, so **Fn+F8** draws there. That is why the
   laptop is driven from the remote, the Start menu and the pen instead.
+
+### Testing touch without hands (`tools/touch-test.ps1`)
+`powershell -ExecutionPolicy Bypass -File tools\touch-test.ps1 [-Steps finger,palm,laser,esc,toolbar]`
+drives the **running** SmoothAnnotate. It uses the control pipe, simulated finger strokes
+(`InjectTouchInput`), a simulated pen (`CreateSyntheticPointerDevice`) and simulated keys. It
+checks the screen for red ink and the log for `touch ignored`, then prints PASS/FAIL per
+check. It takes over the screen for ~30 s and presses Esc, so **tell Omri before running it**.
+All 7 checks passed on the laptop on 2026-09-27. The quirks below cost an afternoon; the
+script works around each one:
+- **WPF sees neither the injected-touch device nor the synthetic pen until its device list
+  refreshes**, a few seconds after the synthetic pen is created. Until then every injected
+  touch is dropped silently: no ink and no log line, which looks exactly like a bug in the
+  app. The warm-up keeps stroking until one draws.
+- **Ink over existing ink can't be measured** by counting red pixels, so the canvas is
+  cleared before every measured stroke.
+- **Long, fast, diagonal injected strokes were sometimes lost** before reaching WPF. It was
+  never reproducible with short horizontal ones, and the mouse drew everywhere, so this is
+  the injection, not the app. All strokes in the script are short and horizontal.
+- **A palm with no ink isn't proof on its own**: the injected touch can also be dropped
+  upstream. The script says which happened ("the app ignored it" = a new `touch ignored`
+  line).
+- The OBS remote is excluded from screen capture: screenshots never show it, but it is
+  there and it is a hole in the drawing layer. The script keeps strokes clear of it.
+- PowerShell traps hit on the way: `$null` passed to a `string` P/Invoke parameter arrives
+  as `""` (use `[NullString]::Value`). `$r` and `$R` are the same variable. An exception on
+  a background .NET thread kills the whole script, results included.
 
 ---
 
