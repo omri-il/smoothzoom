@@ -1,6 +1,7 @@
 # SmoothZoom + SmoothAnnotate
 
 Two companion WPF desktop tools for video tutorial recording: screen zoom + screen annotation overlay.
+Why things are the way they are (dated incidents and decisions): `CHANGELOG.md`, not auto-loaded.
 
 ## Repo layout
 ```
@@ -96,9 +97,9 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 ### Hotkeys
 | Key | Action |
 |-----|--------|
-| F8 | Toggle draw mode (was F9 until 2026-09-27 — F9 is OBS zoom-to-mouse) |
+| F8 | Toggle draw mode (never F9 — that is OBS zoom-to-mouse) |
 | F10 | Clear all |
-| F11 | Laser pointer on/off — pressed again it goes back to the mouse (until 2026-09-27 it went to the pen, so the screen stayed covered) |
+| F11 | Laser pointer on/off — pressed again it goes back to the mouse, never to the pen (the screen would stay covered) |
 | Esc | Stop drawing (back to the mouse). While typing text, the first Esc finishes the text. Swallowed only when it stopped something, so it still reaches the app underneath otherwise |
 | F12 | Timer start/pause (double-tap = reset) |
 | Ctrl+0 | Mouse mode (click-through; the toolbar hides — see Mouse/Pointer below) |
@@ -120,7 +121,7 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 
 ### Toolbar Features
 - **Excalidraw-style horizontal bar** at top-center of screen (draggable)
-- **Mouse/Pointer** — exits draw mode. With `HideToolbarWhenIdle` (default **on** since 2026-09-27) the toolbar **hides completely** — it sits on the recorded screen, so any visible toolbar or dot ends up in every OBS video; F8 / Ctrl+1-8 bring it back. With it off: collapses to a small floating dot; click the dot to re-expand
+- **Mouse/Pointer** — exits draw mode. With `HideToolbarWhenIdle` (default **on**) the toolbar **hides completely** — it sits on the recorded screen, so any visible toolbar or dot ends up in every OBS video; F8 / Ctrl+1-8 bring it back. With it off: collapses to a small floating dot; click the dot to re-expand
 - **Select/Move** — drag ink strokes and shapes to reposition; arrows move as one piece (line + head)
 - **Pen** — pressure-sensitive Wacom support, subtle shadow
 - **Highlighter** — semi-transparent yellow, rectangle tip
@@ -162,7 +163,7 @@ src/SmoothAnnotate/
 ### Key Technical Patterns
 - **Click-through overlay:** `WS_EX_TRANSPARENT` toggled via Win32 `SetWindowLong`. The window's background is always `Transparent`. While drawing, input is caught by `_hitLayer`, an alpha-1 (`#01000000`) fill at the bottom of the overlay's Grid. A layered window takes input only where its pixels aren't fully transparent.
 - **Toolbar clickable in draw mode — two mechanisms, both needed:**
-  - **Holes in the hit layer** (since 2026-09-27) under the toolbar and the OBS remote (`UpdateHitLayer`). A tap there falls through the overlay to the window below. **This is what makes finger taps work:** a finger doesn't hover, so the timer below never sees it coming. Before this, a tap on the toolbar landed on the canvas.
+  - **Holes in the hit layer** under the toolbar and the OBS remote (`UpdateHitLayer`). A tap there falls through the overlay to the window below. **This is what makes finger taps work:** a finger doesn't hover, so the timer below never sees it coming — without the holes a tap on the toolbar lands on the canvas.
   - **50ms `DispatcherTimer`** checks the cursor position via `GetCursorPos` and temporarily sets the overlay click-through while hovering over the toolbar or remote. DPI-aware using `PresentationSource.TransformToDevice`. It also re-cuts the remote's hole when the remote moves; the toolbar's hole follows its `LocationChanged` / `SizeChanged` / `IsVisibleChanged`.
 - **Toolbar in mouse mode:** hidden (`HideToolbarWhenIdle`, the default). Only with that setting off does it collapse to a 42px floating dot; a click on the dot re-expands it and returns to Pen mode.
 - **Single-monitor overlay:** `MonitorFromPoint` + `GetMonitorInfo` constrains overlay to cursor's monitor when entering draw mode.
@@ -208,16 +209,15 @@ callers at once never see "pipe busy".
 - **`laser toggle` = F11**: laser on, or from the laser back to the mouse (`ToggleLaser`).
 - Commands run on the UI thread through `ControlPipeServer.OnUi`, which gives up after
   1.5 s and replies `busy`. The reply is always written, with its own timer.
-  ⚠️ **Until that fix, one 2 s timer covered read + handle + write.** A slow UI moment then
-  cancelled the write, and the caller got an EMPTY reply.
-- ⚠️ **`ControlPipeServer.Send` runs on the thread pool** (`Task.Run`). The first version
-  waited on the async pipe calls straight from the second launch's `OnStartup`, which is
-  the UI thread. Their continuations queued for that same waiting thread, so every
-  `--toggle` copy hung forever after delivering its command (2026-09-27: two copies of
-  SmoothZoom stuck).
+  ⚠️ **Never one timer across read + handle + write:** a slow UI moment cancels the write
+  and the caller gets an EMPTY reply.
+- ⚠️ **`ControlPipeServer.Send` runs on the thread pool** (`Task.Run`). Waiting on the async
+  pipe calls straight from the second launch's `OnStartup` (the UI thread) deadlocks: their
+  continuations queue for that same waiting thread, so the `--toggle` copy delivers its
+  command and then hangs forever.
 - ⚠️ **The server never calls `WaitForPipeDrain()`.** It blocks a thread with no timeout,
-  and those hung callers held an instance each. After replying, it waits at most 2 s for
-  the caller to hang up (`WaitForHangUpAsync`).
+  so a caller that never reads holds an instance for good. After replying, it waits at
+  most 2 s for the caller to hang up (`WaitForHangUpAsync`).
 - A `--toggle` launched from an SSH session (session 0) exits without reaching the
   running copy in the desktop session. A real tap, or a test through an Interactive
   scheduled task, works. Python's plain `open()` on the pipe does work from SSH.
@@ -234,9 +234,8 @@ callers at once never see "pipe busy".
 
 ## Pen and touch (the laptop: HP OmniBook Ultra Flip 14, touch screen + pen)
 - **A finger draws, except while the pen is near** (`IgnoreTouchNearPen`, default true,
-  `Views/PenInkCanvas.cs`). Omri chose this on 2026-09-27, the same day, over the first
-  version's "only the pen draws": he wants to draw with his hand too. `false` = a finger
-  always draws.
+  `Views/PenInkCanvas.cs`). Omri's choice: he draws with his hand too, so don't go back to
+  "only the pen draws" (CHANGELOG). `false` = a finger always draws.
   - **"Near"** = the pen is in range over the overlay, or was less than 1 s ago (a palm lifts
     a moment after the pen). The pen is watched on the whole *window*, with
     `handledEventsToo`: in-range / in-air-move / down / move = here; out-of-range /
@@ -281,8 +280,7 @@ drives the **running** SmoothAnnotate. It uses the control pipe, simulated finge
 (`InjectTouchInput`), a simulated pen (`CreateSyntheticPointerDevice`) and simulated keys. It
 checks the screen for red ink and the log for `touch ignored`, then prints PASS/FAIL per
 check. It takes over the screen for ~30 s and presses Esc, so **tell Omri before running it**.
-All 7 checks passed on the laptop on 2026-09-27. The quirks below cost an afternoon; the
-script works around each one:
+The script works around each quirk below:
 - **WPF sees neither the injected-touch device nor the synthetic pen until its device list
   refreshes**, a few seconds after the synthetic pen is created. Until then every injected
   touch is dropped silently: no ink and no log line, which looks exactly like a bug in the
@@ -349,12 +347,10 @@ for both.
    over SSH `powershell -ExecutionPolicy Bypass -File E:\apps\SmoothTools-incoming-<unique>\install.ps1 -Target E:\apps\SmoothTools`,
    then delete that folder.
    ⚠️ **Give the upload folder a name of your own** (a timestamp works) **and check it doesn't
-   exist first.** On 2026-09-27 two sessions, both told "update the home PC", uploaded into
-   the same `SmoothTools-incoming` a minute apart. `scp -r` into an existing folder nests
-   the copy (`…-incoming\SmoothTools\…`) instead of failing. The first session's cleanup
-   then deleted the second one's half-written files. No harm was done, because the second
-   install found nothing to copy. But an `install.ps1` run from a partial copy stops both
-   apps first, and then copies broken or missing files over the good install.
+   exist first** — two sessions may be told "update the home PC" at once. `scp -r` into an
+   existing folder nests the copy (`…-incoming\SmoothTools\…`) instead of failing, and the
+   other session's cleanup can delete it half-written. An `install.ps1` run from a partial
+   copy stops both apps first, then copies broken or missing files over the good install.
 
 What `deploy\install.ps1` does (safe to re-run; that is how you update):
 - Stops both apps, waits for them to exit, and copies the new files in. Windows can hold an
@@ -363,9 +359,9 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   folder. `start.vbs` launches both apps with `--autostart`, and one that is already running
   exits quietly. The task starts them in the logged-on desktop. That is why it also works
   over SSH, where a process launched directly would run in invisible session 0.
-  ⚠️ `start.vbs` used to ask WMI which apps were running. That failed after an update: a
-  process stopped a moment earlier stays listed while anything still holds a handle to it
-  (install.ps1's own PowerShell did), so SmoothAnnotate was skipped.
+  ⚠️ Never make `start.vbs` ask WMI which apps are running: a process stopped a moment
+  earlier stays listed while anything still holds a handle to it (install.ps1's own
+  PowerShell does), so an app gets skipped after an update.
 - Writes two **Start-menu** entries, `Start Menu\Programs\SmoothTools\`: **"Cursor ring -
   SmoothZoom"** and **"Draw - SmoothAnnotate"**. Both run the exe with `--toggle`, so a tap
   switches the ring or drawing on and off. They can be pinned to the taskbar or picked for
@@ -373,20 +369,19 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   `.lnk` files as empty.
 - 🚨 **The laptop has Smart App Control ON** (last read 2026-09-27 15:49: `Get-MpComputerStatus` →
   `SmartAppControlState: On`; the home PC is Off. Omri was given the steps to turn it off
-  himself, since it's a security setting; re-read it before relying on this line). SAC blocks unsigned programs it has no
-  good cloud verdict for. **Every new build is judged again, and the verdict varies.** On
-  2026-09-27 one build ran SmoothZoom and blocked SmoothAnnotate (CodeIntegrity event
-  3077, "did not meet the Enterprise signing level requirements"). The next build, with
-  only the pipe fix, was let through for both after ~20 s. So after any update, check that
-  both apps are running on the laptop. Launched by `start.vbs`, the block shows up as a
+  himself, since it's a security setting; re-read it before relying on this line). SAC blocks
+  unsigned programs it has no good cloud verdict for. **Every new build is judged again, and
+  the verdict varies** — a build can be blocked and the next one let through (CHANGELOG). So
+  after any update, check that both apps are running on the laptop. A block is CodeIntegrity
+  event 3077, "did not meet the Enterprise signing level requirements". Launched by `start.vbs`, the block shows up as a
   "Windows Script Host" error box. The check: `Get-WinEvent -LogName
   'Microsoft-Windows-CodeIntegrity/Operational'`, event 3077 naming the exe. Never try to
   get around SAC. The only ways forward are Omri turning it off, or a real code-signing
   certificate.
 - ⚠️ **A NEW build can start late, once — which is NOT a block.** On its first run an unknown
   unsigned exe is held for a cloud check (Defender cloud-protection events 2010 at that
-  moment): SmoothAnnotate started 20 s–2 min late on 2026-09-27, while the install printed
-  `running: SmoothZoom` only. Tell the two apart before waiting: a **block** is a CodeIntegrity
+  moment): it starts 20 s–2 min late, and the install prints only the other app (e.g.
+  `running: SmoothZoom`). Tell the two apart before waiting: a **block** is a CodeIntegrity
   3077 naming the exe (above), and waiting never ends it. No 3077 = wait and check again.
   During the hold the file also reads as "in use", so an install run straight after another
   can fail its copy; re-run it.
