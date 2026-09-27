@@ -51,14 +51,14 @@
         </TextBlock>
         <Slider x:Name="RingSizeSlider" Minimum="20" Maximum="120"
                 TickFrequency="5" IsSnapToTickEnabled="True"
-                Value="80" ValueChanged="RingSizeSlider_ValueChanged"/>
+                Value="70" ValueChanged="RingSizeSlider_ValueChanged"/>
 
         <TextBlock Text="Ring Color:" Margin="0,0,0,4"/>
         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
             <RadioButton x:Name="ColorBlue" Content="Blue" Foreground="#CDD6F4"
-                         GroupName="RingColor" IsChecked="True" Margin="0,0,12,0"/>
-            <RadioButton x:Name="ColorYellow" Content="Yellow" Foreground="#CDD6F4"
                          GroupName="RingColor" Margin="0,0,12,0"/>
+            <RadioButton x:Name="ColorYellow" Content="Yellow" Foreground="#CDD6F4"
+                         GroupName="RingColor" IsChecked="True" Margin="0,0,12,0"/>
             <RadioButton x:Name="ColorRed" Content="Red" Foreground="#CDD6F4"
                          GroupName="RingColor" Margin="0,0,12,0"/>
             <RadioButton x:Name="ColorGreen" Content="Green" Foreground="#CDD6F4"

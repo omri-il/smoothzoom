@@ -22,6 +22,7 @@ public class KeyboardHookService : IDisposable
     public event Action? HighlightTogglePressed;
     public event Action? HelpTogglePressed;
     public event Action<bool>? MiddleButtonChanged;
+    public event Action<bool>? MouseClicked; // true = right button
 
     private ClickTranslationService? _clickTranslation;
 
@@ -124,10 +125,19 @@ public class KeyboardHookService : IDisposable
                 MiddleButtonChanged?.Invoke(false);
             }
 
+            var hookData = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
+
+            // Click ripple — real clicks only, so a click re-sent by the
+            // translation below is not shown twice
+            if ((msg == User32.WM_LBUTTONDOWN || msg == User32.WM_RBUTTONDOWN)
+                && (hookData.flags & User32.LLMHF_INJECTED) == 0)
+            {
+                MouseClicked?.Invoke(msg == User32.WM_RBUTTONDOWN);
+            }
+
             // Click translation for windowed magnifier
             if (_clickTranslation != null)
             {
-                var hookData = Marshal.PtrToStructure<User32.MSLLHOOKSTRUCT>(lParam);
                 if (_clickTranslation.TryTranslateClick(msg, hookData))
                     return (IntPtr)1; // Swallow the original click
             }

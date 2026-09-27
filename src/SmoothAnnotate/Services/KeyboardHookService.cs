@@ -79,8 +79,8 @@ public class KeyboardHookService : IDisposable
                 // F-key hotkeys (no modifiers needed - simple and reliable)
                 switch (kbd.vkCode)
                 {
-                    case 0x78: // F9 - Toggle draw mode
-                        App.Log("F9 pressed -> DrawModeToggled");
+                    case 0x77: // F8 - Toggle draw mode (F9 is OBS zoom-to-mouse)
+                        App.Log("F8 pressed -> DrawModeToggled");
                         DrawModeToggled?.Invoke();
                         break;
                     case 0x79: // F10 - Clear canvas

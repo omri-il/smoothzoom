@@ -95,6 +95,10 @@ public partial class OverlayWindow : Window
         _toolbar.ConfettiRequested += TriggerConfetti;
         _toolbar.CloseRequested += () => System.Windows.Application.Current.Shutdown();
         _toolbar.Show();
+        // Shown once so it lays out and positions itself, then hidden until you draw
+        if (_settings.HideToolbarWhenIdle)
+            Dispatcher.BeginInvoke(() => { if (!_isDrawMode) _toolbar?.Hide(); },
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
         // Timer to detect when cursor is over toolbar and pass clicks through
         _toolbarHitTimer = new System.Windows.Threading.DispatcherTimer
@@ -371,6 +375,11 @@ public partial class OverlayWindow : Window
             RepositionToCurrentMonitor();
             Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
             OverlayService.RemoveClickThrough(_hwnd);
+            if (_settings.HideToolbarWhenIdle && _toolbar != null)
+            {
+                _toolbar.ExpandFromMinimal();
+                _toolbar.Show();
+            }
             _toolbar?.RaiseAboveOverlay();
             _toolbarHitTimer.Start();
         }
@@ -384,6 +393,8 @@ public partial class OverlayWindow : Window
         SetTool(AnnotationTool.None);
         Background = Brushes.Transparent;
         OverlayService.SetClickThrough(_hwnd);
+        if (_settings.HideToolbarWhenIdle)
+            _toolbar?.Hide();
         // Stay on current monitor so annotations remain visible and positioned correctly
     }
 

@@ -100,6 +100,7 @@ public static class User32
     public const int WM_MBUTTONDOWN = 0x0207;
     public const int WM_MBUTTONUP = 0x0208;
     public const int WM_MOUSEMOVE = 0x0200;
+    public const uint LLMHF_INJECTED = 0x00000001;
 
     // SendInput constants
     public const uint INPUT_MOUSE = 0;

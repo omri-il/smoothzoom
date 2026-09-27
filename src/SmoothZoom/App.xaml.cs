@@ -18,6 +18,8 @@ public partial class App : System.Windows.Application
     private ZoomController? _zoomController;
     private CursorHighlightService? _cursorHighlight;
     private ClickTranslationService? _clickTranslation;
+    private ObsRecordingWatcher? _obsWatcher;
+    private bool _ringOnForRecording; // the watcher (not Ctrl+Alt+H) turned the ring on
     private HelpOverlay? _helpOverlay;
     private AppSettings _settings = new();
 
@@ -56,6 +58,29 @@ public partial class App : System.Windows.Application
 
         SetupTrayIcon();
         SetupKeyboardHook();
+
+        if (_settings.AutoRingWhileRecording)
+        {
+            _obsWatcher = new ObsRecordingWatcher();
+            _obsWatcher.RecordingChanged += r => Dispatcher.BeginInvoke(() => OnRecordingChanged(r));
+            _obsWatcher.Start();
+        }
+    }
+
+    private void OnRecordingChanged(bool recording)
+    {
+        if (_cursorHighlight == null) return;
+        if (recording)
+        {
+            if (_cursorHighlight.IsActive) return; // already on by hand — leave it to the user
+            _cursorHighlight.SetActive(true);
+            _ringOnForRecording = true;
+        }
+        else if (_ringOnForRecording)
+        {
+            _cursorHighlight.SetActive(false);
+            _ringOnForRecording = false;
+        }
     }
 
     private void ApplySettings()
@@ -69,6 +94,8 @@ public partial class App : System.Windows.Application
         if (_cursorHighlight != null)
         {
             _cursorHighlight.RingSize = _settings.HighlightRingSize;
+            _cursorHighlight.RingThickness = _settings.HighlightThickness;
+            _cursorHighlight.ClickRipple = _settings.ClickRipple;
             try
             {
                 _cursorHighlight.RingColor =
@@ -76,6 +103,14 @@ public partial class App : System.Windows.Application
                         _settings.HighlightColor);
             }
             catch { /* keep default if parse fails */ }
+            try
+            {
+                _cursorHighlight.RingFill =
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        _settings.HighlightFill);
+            }
+            catch { /* keep default if parse fails */ }
+            _cursorHighlight.Refresh();
         }
     }
 
@@ -161,7 +196,12 @@ public partial class App : System.Windows.Application
         _keyboardHook.ZoomInStepPressed      += () => Dispatcher.BeginInvoke(() => _zoomController?.ZoomInStep());
         _keyboardHook.ZoomOutStepPressed     += () => Dispatcher.BeginInvoke(() => _zoomController?.ZoomOutStep());
         _keyboardHook.MiddleButtonChanged    += (p)  => Dispatcher.BeginInvoke(() => _zoomController?.SetMiddleDragging(p));
-        _keyboardHook.HighlightTogglePressed += () => Dispatcher.BeginInvoke(() => _cursorHighlight?.Toggle());
+        _keyboardHook.HighlightTogglePressed += () => Dispatcher.BeginInvoke(() =>
+        {
+            _cursorHighlight?.Toggle();
+            _ringOnForRecording = false; // a manual toggle takes over from auto-on
+        });
+        _keyboardHook.MouseClicked           += (r) => Dispatcher.BeginInvoke(() => _cursorHighlight?.ShowClick(r));
         _keyboardHook.HelpTogglePressed      += () => Dispatcher.BeginInvoke(OnHelpToggle);
     }
 
@@ -200,6 +240,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _obsWatcher?.Dispose();
         _cursorHighlight?.Dispose();
         _zoomController?.Dispose();
         _magnification?.Dispose();

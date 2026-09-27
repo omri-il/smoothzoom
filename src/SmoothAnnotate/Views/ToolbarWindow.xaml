@@ -97,7 +97,7 @@
 
                 <!-- Drawing tools -->
                 <Button x:Name="BtnPen" Style="{StaticResource ToolBtn}"
-                        Tag="Pen" Click="ToolButton_Click" ToolTip="Pen (F9)">
+                        Tag="Pen" Click="ToolButton_Click" ToolTip="Pen (F8)">
                     <Ellipse Width="12" Height="12">
                         <Ellipse.Fill>
                             <RadialGradientBrush>

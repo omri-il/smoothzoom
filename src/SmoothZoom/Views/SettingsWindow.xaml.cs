@@ -58,21 +58,21 @@ public partial class SettingsWindow : Window
     {
         switch (color)
         {
-            case "#DCFFE632": ColorYellow.IsChecked = true; break;
+            case "#DC4182DC": ColorBlue.IsChecked = true; break;
             case "#DCFF4050": ColorRed.IsChecked = true; break;
             case "#DC40C040": ColorGreen.IsChecked = true; break;
             case "#DCFFFFFF": ColorWhite.IsChecked = true; break;
-            default: ColorBlue.IsChecked = true; break;
+            default: ColorYellow.IsChecked = true; break;
         }
     }
 
     private string GetSelectedColor()
     {
-        if (ColorYellow.IsChecked == true) return "#DCFFE632";
+        if (ColorBlue.IsChecked == true) return "#DC4182DC";
         if (ColorRed.IsChecked == true) return "#DCFF4050";
         if (ColorGreen.IsChecked == true) return "#DC40C040";
         if (ColorWhite.IsChecked == true) return "#DCFFFFFF";
-        return "#DC4182DC"; // Blue default
+        return "#DCFFE632"; // Yellow default
     }
 
     private void SaveAndClose_Click(object sender, RoutedEventArgs e)
@@ -84,6 +84,11 @@ public partial class SettingsWindow : Window
             CursorTrackingSpeed = (float)TrackingSlider.Value,
             HighlightRingSize = RingSizeSlider.Value,
             HighlightColor = GetSelectedColor(),
+            // Not in the dialog yet — carried over from settings.json
+            HighlightThickness = Settings.HighlightThickness,
+            HighlightFill = Settings.HighlightFill,
+            ClickRipple = Settings.ClickRipple,
+            AutoRingWhileRecording = Settings.AutoRingWhileRecording,
             StartWithWindows = StartWithWindowsCheckBox.IsChecked ?? true
         };
         Saved = true;

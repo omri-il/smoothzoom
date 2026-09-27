@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -12,15 +13,25 @@ namespace SmoothZoom.Services;
 public class CursorHighlightService : IDisposable
 {
     private Window? _overlayWindow;
+    private Canvas? _canvas;
     private readonly DispatcherTimer _timer;
     private bool _isActive;
     private MagnificationService? _magnificationService;
 
     // Configurable
-    public double RingSize { get; set; } = 80;
-    public double RingThickness { get; set; } = 3;
+    public double RingSize { get; set; } = 70;
+    public double RingThickness { get; set; } = 4;
     public System.Windows.Media.Color RingColor { get; set; } =
-        System.Windows.Media.Color.FromArgb(220, 65, 130, 220); // Blue
+        System.Windows.Media.Color.FromArgb(220, 255, 230, 50); // Yellow
+    public System.Windows.Media.Color RingFill { get; set; } =
+        System.Windows.Media.Color.FromArgb(48, 255, 230, 50);  // Faint yellow
+    public bool ClickRipple { get; set; } = true;
+
+    // Ripple grows from the ring to RippleScale × ring, fading out
+    private const double RippleScale = 2.0;
+    private const int RippleMs = 350;
+    private static readonly System.Windows.Media.Color RightClickColor =
+        System.Windows.Media.Color.FromArgb(230, 255, 80, 80); // Red
 
     public CursorHighlightService()
     {
@@ -56,15 +67,31 @@ public class CursorHighlightService : IDisposable
             Activate();
     }
 
+    public void SetActive(bool active)
+    {
+        if (active) Activate();
+        else Deactivate();
+    }
+
     public bool IsActive => _isActive;
+
+    /// <summary>
+    /// Rebuild the ring so new size/colour settings take effect immediately.
+    /// </summary>
+    public void Refresh()
+    {
+        if (!_isActive) return;
+        Deactivate();
+        Activate();
+    }
 
     private void Activate()
     {
         if (_overlayWindow != null) return;
 
-        // Window needs extra space for the glow shadow
+        // Window needs extra space for the glow shadow and the click ripple
         double glowRadius = 8;
-        double windowSize = RingSize + RingThickness * 2 + glowRadius * 2 + 4;
+        double windowSize = RingSize * RippleScale + RingThickness * 2 + glowRadius * 2 + 4;
 
         _overlayWindow = new Window
         {
@@ -78,7 +105,7 @@ public class CursorHighlightService : IDisposable
             ResizeMode = ResizeMode.NoResize,
         };
 
-        var canvas = new Canvas { Width = windowSize, Height = windowSize };
+        _canvas = new Canvas { Width = windowSize, Height = windowSize };
 
         // Clean ring with subtle outer glow
         var ring = new Ellipse
@@ -87,7 +114,7 @@ public class CursorHighlightService : IDisposable
             Height = RingSize,
             Stroke = new SolidColorBrush(RingColor),
             StrokeThickness = RingThickness,
-            Fill = System.Windows.Media.Brushes.Transparent,
+            Fill = new SolidColorBrush(RingFill),
             Effect = new DropShadowEffect
             {
                 Color = RingColor,
@@ -102,9 +129,9 @@ public class CursorHighlightService : IDisposable
         double offset = (windowSize - RingSize) / 2;
         Canvas.SetLeft(ring, offset);
         Canvas.SetTop(ring, offset);
-        canvas.Children.Add(ring);
+        _canvas.Children.Add(ring);
 
-        _overlayWindow.Content = canvas;
+        _overlayWindow.Content = _canvas;
         _overlayWindow.Show();
         MakeClickThrough();
 
@@ -113,7 +140,45 @@ public class CursorHighlightService : IDisposable
         _magnificationService?.ExcludeWindow(hwnd);
 
         _isActive = true;
+        OnTimerTick(null, EventArgs.Empty); // place it before the first frame
         _timer.Start();
+    }
+
+    /// <summary>
+    /// A short expanding pulse at the cursor. Must be called on the UI thread.
+    /// </summary>
+    public void ShowClick(bool rightButton)
+    {
+        if (!_isActive || !ClickRipple || _canvas == null) return;
+
+        var color = rightButton ? RightClickColor : RingColor;
+        var ripple = new Ellipse
+        {
+            Width = RingSize,
+            Height = RingSize,
+            Stroke = new SolidColorBrush(color),
+            StrokeThickness = RingThickness,
+            RenderTransformOrigin = new System.Windows.Point(0.5, 0.5),
+            IsHitTestVisible = false,
+        };
+        var scale = new ScaleTransform(1, 1);
+        ripple.RenderTransform = scale;
+
+        double offset = (_canvas.Width - RingSize) / 2;
+        Canvas.SetLeft(ripple, offset);
+        Canvas.SetTop(ripple, offset);
+        _canvas.Children.Add(ripple);
+
+        var duration = TimeSpan.FromMilliseconds(RippleMs);
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        var grow = new DoubleAnimation(1, RippleScale, duration) { EasingFunction = ease };
+        var fade = new DoubleAnimation(1, 0, duration);
+        var canvas = _canvas;
+        fade.Completed += (_, _) => canvas.Children.Remove(ripple);
+
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        ripple.BeginAnimation(UIElement.OpacityProperty, fade);
     }
 
     private void MakeClickThrough()
@@ -134,6 +199,7 @@ public class CursorHighlightService : IDisposable
             _magnificationService?.RemoveExcludedWindow(hwnd);
             _overlayWindow.Close();
             _overlayWindow = null;
+            _canvas = null;
         }
         _isActive = false;
     }

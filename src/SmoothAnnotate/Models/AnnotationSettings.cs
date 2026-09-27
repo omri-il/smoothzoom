@@ -11,4 +11,7 @@ public class AnnotationSettings
     public string LaserColor { get; set; } = "#FF0000";
     public int LaserFadeMs { get; set; } = 1500;
     public double TimerFontSize { get; set; } = 28.0;
+    // Hide the toolbar (not just collapse it to a dot) whenever you aren't drawing,
+    // so it never appears in OBS recordings. F8 / Ctrl+1-8 bring it back.
+    public bool HideToolbarWhenIdle { get; set; } = true;
 }
