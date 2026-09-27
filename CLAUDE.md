@@ -357,6 +357,22 @@ for both.
    existing folder nests the copy (`…-incoming\SmoothTools\…`) instead of failing, and the
    other session's cleanup can delete it half-written. An `install.ps1` run from a partial
    copy stops both apps first, then copies broken or missing files over the good install.
+   🚨 **Never put the upload folder's name in an inline SSH command as a variable** (e.g.
+   `"… Remove-Item -Recurse -Force E:\apps\\$IN"` from bash). On 2026-09-27 the backslashes
+   were eaten on the way, PowerShell received `E:\apps$IN`, `$IN` was an empty PowerShell
+   variable, and the cleanup ran as **`Remove-Item -Recurse -Force E:\apps`**. Only the two
+   running exes survived (locked); `start.vbs` and `install.ps1` were deleted. So:
+   - Write the name literally, use forward slashes (`E:/apps/…`, which PowerShell accepts
+     and nothing mangles), and pass it to a script **file** that refuses anything not
+     matching `^SmoothTools-incoming-[A-Za-z0-9-]+$` before it installs or deletes.
+   - Delete with `-LiteralPath` only.
+   ⚠️ **A large `scp` to the home PC can stop partway and still exit 0.** Twice on
+   2026-09-27 it stopped at ~52 MB of a 72 MB exe, leaving a truncated exe beside a complete
+   `install.ps1`. What worked: 8 MB chunks, each `scp`'d with a timeout and a retry (the 21
+   chunks took ~40 s). Then reassemble on the home PC and check every file's SHA-256 against
+   a manifest before installing, and let the install refuse any folder not marked verified.
+   Those helper scripts live outside the repo so far. If you deploy to the home PC more than
+   once, add them to `deploy/`.
 
 What `deploy\install.ps1` does (safe to re-run; that is how you update):
 - Stops both apps, waits for them to exit, and copies the new files in. Windows can hold an

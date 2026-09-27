@@ -4,6 +4,24 @@
 keeps the rules; this file keeps why they exist — the dated incidents and decisions behind
 them. Newest first. Git history has the full detail.
 
+## 2026-09-27 (night) — a home-PC deploy that deleted E:\apps
+
+Deploying the ✕ fix to the home PC, an inline SSH command carried the upload folder's
+name as `E:\apps\\$IN`. The backslashes were eaten on the way; PowerShell saw
+`E:\apps$IN` with `$IN` empty, so the install looked for `E:\apps\install.ps1` (not
+found), and the cleanup ran `Remove-Item -Recurse -Force E:\apps`. Only the two running
+exes survived (locked). `start.vbs` and `install.ps1` were gone, so the logon task would
+have started nothing. The follow-up test ran on the OLD build, and its ✕ click quit
+SmoothAnnotate, as the old ✕ did. A restart attempt then hung on a "script not found" box,
+and while that `wscript` lived, every later start of the SmoothTools task was refused
+(0x800710E0: one instance was still running).
+
+Repair: the upload was re-sent as 8 MB chunks (a single `scp` twice stopped at ~52 MB),
+reassembled and SHA-256-checked, and installed through a guarded script. Then the stuck
+`wscript` was closed and the task started again. Result: all four files back, both apps
+running, and the ✕ fix verified with a real click (the app stays, drawing turns off). The
+rules are in CLAUDE.md → Install / update, step 3.
+
 ## 2026-09-27 (evening) — the toolbar ✕ stops drawing instead of quitting
 
 The toolbar's ✕ called `Application.Current.Shutdown()`. On the laptop SmoothAnnotate
