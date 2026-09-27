@@ -331,9 +331,16 @@ for both.
    committed): a yellow ring on a dark tile, and a pencil on a red tile. The tray icons
    are the same icons, read back from the exe.
 2. **Laptop:** `& publish\SmoothTools\install.ps1 -Target "$env:LOCALAPPDATA\Programs\SmoothTools"`
-3. **Home PC:** `scp -r publish/SmoothTools omrii@100.111.186.101:E:/apps/SmoothTools-incoming`, then
-   over SSH `powershell -ExecutionPolicy Bypass -File E:\apps\SmoothTools-incoming\install.ps1 -Target E:\apps\SmoothTools`,
-   then delete `SmoothTools-incoming`.
+3. **Home PC:** `scp -r publish/SmoothTools omrii@100.111.186.101:E:/apps/SmoothTools-incoming-<unique>`, then
+   over SSH `powershell -ExecutionPolicy Bypass -File E:\apps\SmoothTools-incoming-<unique>\install.ps1 -Target E:\apps\SmoothTools`,
+   then delete that folder.
+   ⚠️ **Give the upload folder a name of your own** (a timestamp works) **and check it doesn't
+   exist first.** On 2026-09-27 two sessions, both told "update the home PC", uploaded into
+   the same `SmoothTools-incoming` a minute apart. `scp -r` into an existing folder nests
+   the copy (`…-incoming\SmoothTools\…`) instead of failing. The first session's cleanup
+   then deleted the second one's half-written files. No harm was done, because the second
+   install found nothing to copy. But an `install.ps1` run from a partial copy stops both
+   apps first, and then copies broken or missing files over the good install.
 
 What `deploy\install.ps1` does (safe to re-run; that is how you update):
 - Stops both apps, waits for them to exit, and copies the new files in. Windows can hold an
