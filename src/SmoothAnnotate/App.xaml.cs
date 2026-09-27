@@ -216,6 +216,9 @@ public partial class App : System.Windows.Application
 
         // Ctrl+V = paste image from clipboard onto overlay
         _keyboardHook.ClipboardPaste += () => Dispatcher.Invoke(() => _overlayWindow?.PasteImageFromClipboard());
+
+        // Esc = stop drawing. The hook runs on this (UI) thread, so Invoke answers at once.
+        _keyboardHook.EscapePressed += () => Dispatcher.Invoke(() => _overlayWindow?.HandleEscape() ?? false);
     }
 
     private void OnQuitClicked(object? sender, EventArgs e)

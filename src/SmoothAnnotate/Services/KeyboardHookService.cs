@@ -35,6 +35,11 @@ public class KeyboardHookService : IDisposable
     // Clipboard paste
     public event Action? ClipboardPaste;
 
+    // Esc: answers true when it used the key (stopped drawing). The key is then kept from
+    // the app underneath — there Esc would also end a PowerPoint slideshow, say.
+    public event Func<bool>? EscapePressed;
+    private bool _swallowEscapeUp;
+
     public KeyboardHookService()
     {
         _kbHookProc = KeyboardHookCallback;
@@ -72,6 +77,20 @@ public class KeyboardHookService : IDisposable
                 case 0xA4 or 0xA5: // VK_LMENU / VK_RMENU (Alt)
                     _altPressed = isKeyDown;
                     break;
+            }
+
+            if (kbd.vkCode == 0x1B) // VK_ESCAPE - plain Esc only (Ctrl+Alt+Esc is SmoothZoom's)
+            {
+                if (isKeyDown && !_ctrlPressed && !_altPressed && EscapePressed?.Invoke() == true)
+                {
+                    _swallowEscapeUp = true;
+                    return (IntPtr)1;
+                }
+                if (!isKeyDown && _swallowEscapeUp)
+                {
+                    _swallowEscapeUp = false;
+                    return (IntPtr)1;
+                }
             }
 
             if (isKeyDown)

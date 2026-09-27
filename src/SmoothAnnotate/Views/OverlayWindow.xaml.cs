@@ -27,6 +27,17 @@ public partial class OverlayWindow : Window
     private ToolbarWindow? _toolbar;
     private readonly System.Windows.Threading.DispatcherTimer _toolbarHitTimer;
 
+    // Draw mode catches input with this near-invisible fill (alpha 1): a layered window
+    // takes input only where its pixels aren't fully transparent. The fill has a hole where
+    // the toolbar is, so a finger tap there reaches the toolbar. A finger, unlike the
+    // mouse, doesn't hover first for OnToolbarHitCheck to notice.
+    private readonly System.Windows.Shapes.Path _hitLayer = new()
+    {
+        Fill = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)),
+        IsHitTestVisible = false
+    };
+    private bool _catchInput;
+
     // Current drawing color
     private Color _currentColor;
 
@@ -65,6 +76,8 @@ public partial class OverlayWindow : Window
     {
         InitializeComponent();
         _settings = settings;
+        ((Grid)Content).Children.Insert(0, _hitLayer);
+        SizeChanged += (_, _) => UpdateHitLayer();
         _currentColor = (Color)ColorConverter.ConvertFromString(_settings.PenColor);
 
         DrawCanvas.StrokeCollected += OnStrokeCollected;
@@ -95,6 +108,10 @@ public partial class OverlayWindow : Window
         };
         _toolbar.ConfettiRequested += TriggerConfetti;
         _toolbar.CloseRequested += () => System.Windows.Application.Current.Shutdown();
+        // Keep the hit layer's hole on the toolbar as it's dragged, collapsed, shown or hidden
+        _toolbar.LocationChanged += (_, _) => UpdateHitLayer();
+        _toolbar.SizeChanged += (_, _) => UpdateHitLayer();
+        _toolbar.IsVisibleChanged += (_, _) => UpdateHitLayer();
         _toolbar.Show();
         // Shown once so it lays out and positions itself, then hidden until you draw
         if (_settings.HideToolbarWhenIdle)
@@ -298,19 +315,22 @@ public partial class OverlayWindow : Window
         }
     }
 
-    public void ToggleLaser()
+    // F11 again = back to the mouse. It used to switch to the pen, which kept the screen
+    // covered — pressing F11 to get out left you stuck in drawing mode.
+    public void ToggleLaser() =>
+        OnToolbarToolSelected(_currentTool == AnnotationTool.Laser ? AnnotationTool.None : AnnotationTool.Laser);
+
+    /// <summary>Esc: finish the text being typed, otherwise stop drawing. False when not
+    /// drawing, so the key goes on to the app underneath.</summary>
+    public bool HandleEscape()
     {
-        if (_currentTool == AnnotationTool.Laser)
-        {
-            SetTool(AnnotationTool.Pen);
-            ShowModeIndicator("PEN");
-        }
+        // _isDrawMode with no tool = confetti borrowing the overlay; nothing to stop
+        if (!_isDrawMode || _currentTool == AnnotationTool.None) return false;
+        if (_activeTextBox != null)
+            CommitActiveTextBox();
         else
-        {
-            EnterDrawMode();
-            SetTool(AnnotationTool.Laser);
-            ShowModeIndicator("LASER");
-        }
+            OnToolbarToolSelected(AnnotationTool.None);
+        return true;
     }
 
     // --- Color Switching ---
@@ -365,6 +385,34 @@ public partial class OverlayWindow : Window
         ShowModeIndicator("CLEARED");
     }
 
+    // --- Hit layer (see _hitLayer) ---
+
+    private void SetCatchInput(bool on)
+    {
+        _catchInput = on;
+        UpdateHitLayer();
+    }
+
+    private void UpdateHitLayer()
+    {
+        if (!_catchInput) { _hitLayer.Data = null; return; }
+        Geometry fill = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight));
+        if (ToolbarRect() is Rect hole)
+            fill = new CombinedGeometry(GeometryCombineMode.Exclude, fill, new RectangleGeometry(hole));
+        _hitLayer.Data = fill;
+    }
+
+    /// <summary>The toolbar's area in this window's coordinates, or null while it's hidden.</summary>
+    private Rect? ToolbarRect()
+    {
+        if (_toolbar is not { IsVisible: true }
+            || PresentationSource.FromVisual(_toolbar) == null || PresentationSource.FromVisual(this) == null)
+            return null;
+        var topLeft = PointFromScreen(_toolbar.PointToScreen(new Point(0, 0)));
+        var bottomRight = PointFromScreen(_toolbar.PointToScreen(new Point(_toolbar.ActualWidth, _toolbar.ActualHeight)));
+        return new Rect(topLeft, bottomRight);
+    }
+
     // --- Internal Helpers ---
 
     private void EnterDrawMode()
@@ -374,7 +422,7 @@ public partial class OverlayWindow : Window
             _isDrawMode = true;
             _isOverToolbar = false;
             RepositionToCurrentMonitor();
-            Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
+            SetCatchInput(true);
             OverlayService.RemoveClickThrough(_hwnd);
             if (_settings.HideToolbarWhenIdle && _toolbar != null)
             {
@@ -403,7 +451,7 @@ public partial class OverlayWindow : Window
         _isOverToolbar = false;
         _toolbarHitTimer.Stop();
         SetTool(AnnotationTool.None);
-        Background = Brushes.Transparent;
+        SetCatchInput(false);
         OverlayService.SetClickThrough(_hwnd);
         if (_settings.HideToolbarWhenIdle)
             _toolbar?.Hide();
@@ -1027,7 +1075,7 @@ public partial class OverlayWindow : Window
         {
             _isDrawMode = true;
             RepositionToCurrentMonitor();
-            Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
+            SetCatchInput(true);
             OverlayService.RemoveClickThrough(_hwnd);
         }
 
