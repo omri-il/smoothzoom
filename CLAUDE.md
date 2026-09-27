@@ -2,6 +2,16 @@
 
 Two companion WPF desktop tools for video tutorial recording: screen zoom + screen annotation overlay.
 
+## Repo layout
+```
+src/SmoothZoom/        the ring + screen zoom app (below)
+src/SmoothAnnotate/    the drawing overlay app (below)
+src/Shared/ControlPipe.cs   the control pipe, compiled into both ("Control from other programs")
+deploy/                publish.ps1 · install.ps1 · start.vbs · make_icons.py ("Install / update")
+assets/                smoothzoom.ico · smoothannotate.ico (drawn by deploy/make_icons.py)
+tools/touch-test.ps1   touch/pen checks without hands ("Testing touch without hands")
+```
+
 ## SmoothZoom (`src/SmoothZoom/`)
 
 Lightweight Windows background utility for smooth, GPU-accelerated screen zooming. Designed for OBS tutorial recordings.
@@ -37,6 +47,7 @@ src/SmoothZoom/
 │   ├── ZoomController.cs      # Core: easing, state machine, cursor tracking
 │   ├── MagnificationService.cs # Zoom transform + offset math + edge clamping
 │   ├── KeyboardHookService.cs # Global keyboard + mouse hooks
+│   ├── ClickTranslationService.cs # Clicks while zoomed land where they appear (windowed magnifier)
 │   ├── CursorHighlightService.cs # Cursor ring overlay + click ripple
 │   ├── ObsRecordingWatcher.cs # obs-websocket v5 client: recording on/off → ring on/off
 │   └── SettingsService.cs     # JSON persistence
@@ -51,7 +62,7 @@ src/SmoothZoom/
 Stored at `%APPDATA%\SmoothZoom\settings.json`. Defaults:
 - Zoom level: 2.0x (range: 1.5–4.0x)
 - Zoom speed: 300ms (range: 100–800ms)
-- Cursor tracking: 0.15 (medium)
+- Cursor tracking: 0.25 (the dialog calls it "Loose"; `AppSettings.CursorTrackingSpeed`)
 - Start with Windows: enabled (only written to the registry when Settings is saved)
 - Cursor ring: yellow `#DCFFE632`, 70 px, 4 px thick, faint fill `HighlightFill` `#30FFE632`
   (`HighlightThickness` / `HighlightFill` / `ClickRipple` / `AutoRingWhileRecording` are
@@ -90,7 +101,7 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 | F11 | Laser pointer on/off — pressed again it goes back to the mouse (until 2026-09-27 it went to the pen, so the screen stayed covered) |
 | Esc | Stop drawing (back to the mouse). While typing text, the first Esc finishes the text. Swallowed only when it stopped something, so it still reaches the app underneath otherwise |
 | F12 | Timer start/pause (double-tap = reset) |
-| Ctrl+0 | Mouse mode (click-through, toolbar collapses to dot) |
+| Ctrl+0 | Mouse mode (click-through; the toolbar hides — see Mouse/Pointer below) |
 | Ctrl+1 | Pen |
 | Ctrl+2 | Highlighter |
 | Ctrl+3 | Laser |
@@ -153,7 +164,7 @@ src/SmoothAnnotate/
 - **Toolbar clickable in draw mode — two mechanisms, both needed:**
   - **Holes in the hit layer** (since 2026-09-27) under the toolbar and the OBS remote (`UpdateHitLayer`). A tap there falls through the overlay to the window below. **This is what makes finger taps work:** a finger doesn't hover, so the timer below never sees it coming. Before this, a tap on the toolbar landed on the canvas.
   - **50ms `DispatcherTimer`** checks the cursor position via `GetCursorPos` and temporarily sets the overlay click-through while hovering over the toolbar or remote. DPI-aware using `PresentationSource.TransformToDevice`. It also re-cuts the remote's hole when the remote moves; the toolbar's hole follows its `LocationChanged` / `SizeChanged` / `IsVisibleChanged`.
-- **Toolbar collapse:** When mouse mode is selected, toolbar collapses to a 42px floating dot. Click dot to re-expand and return to Pen mode.
+- **Toolbar in mouse mode:** hidden (`HideToolbarWhenIdle`, the default). Only with that setting off does it collapse to a 42px floating dot; a click on the dot re-expands it and returns to Pen mode.
 - **Single-monitor overlay:** `MonitorFromPoint` + `GetMonitorInfo` constrains overlay to cursor's monitor when entering draw mode.
 - **WS_EX_NOACTIVATE** on overlay so toolbar keeps focus.
 - **Arrow pairing:** `_arrowPairs` dictionary maps Line↔Polygon so Select tool moves both together.
@@ -259,8 +270,10 @@ callers at once never see "pipe busy".
   scaling a ring is 2× its size in pixels, and OBS shrinks that screen to 0.6× (1800 →
   1080), so 60 comes out at ~72 px in the video, matching the home PC's 70. This is a
   per-machine value, never a code default.
-- HP's F-keys are media keys unless Fn is held, so **Fn+F8** draws there. That is why the
-  laptop is driven from the remote, the Start menu and the pen instead.
+- HP laptops ship with the top row as media keys (F1–F12 need Fn), so on the laptop F8 is
+  most likely **Fn+F8**. Not verified on this one: its BIOS "action keys" setting needs admin
+  to read (2026-09-27). Either way the laptop is meant to be driven from the remote, the
+  Start menu and the pen.
 
 ### Testing touch without hands (`tools/touch-test.ps1`)
 `powershell -ExecutionPolicy Bypass -File tools\touch-test.ps1 [-Steps finger,palm,laser,esc,toolbar]`
@@ -293,8 +306,9 @@ script works around each one:
 ## Build & Run
 
 ```bash
-# Requires .NET 8 SDK
-# If not in PATH: export PATH="$LOCALAPPDATA/dotnet:$PATH"
+# Requires the .NET 8 SDK: on the laptop, 8.0.425 in C:\Program Files\dotnet (winget,
+# 2026-09-27). A shell opened before that install lacks it on PATH: open a new one.
+# The home PC has no SDK (see "Install / update").
 
 # Build both
 dotnet build src/SmoothZoom/SmoothZoom.csproj
@@ -357,8 +371,9 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   switches the ring or drawing on and off. They can be pinned to the taskbar or picked for
   the pen's top button. The names are English because WScript.Shell reads Hebrew-named
   `.lnk` files as empty.
-- 🚨 **The laptop has Smart App Control ON** (read 2026-09-27: `Get-MpComputerStatus` →
-  `SmartAppControlState: On`; the home PC is Off). SAC blocks unsigned programs it has no
+- 🚨 **The laptop has Smart App Control ON** (last read 2026-09-27 15:49: `Get-MpComputerStatus` →
+  `SmartAppControlState: On`; the home PC is Off. Omri was given the steps to turn it off
+  himself, since it's a security setting; re-read it before relying on this line). SAC blocks unsigned programs it has no
   good cloud verdict for. **Every new build is judged again, and the verdict varies.** On
   2026-09-27 one build ran SmoothZoom and blocked SmoothAnnotate (CodeIntegrity event
   3077, "did not meet the Enterprise signing level requirements"). The next build, with
@@ -368,10 +383,12 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   'Microsoft-Windows-CodeIntegrity/Operational'`, event 3077 naming the exe. Never try to
   get around SAC. The only ways forward are Omri turning it off, or a real code-signing
   certificate.
-- ⚠️ **A NEW build starts late, once.** Microsoft Defender holds an unknown unsigned exe for
-  a cloud scan on its first run: SmoothAnnotate took ~1–2 min on 2026-09-27, while the
-  install printed `running: SmoothZoom` only. Wait and check again before debugging. The
-  file also reads as "in use" during the scan, so an install run straight after another
+- ⚠️ **A NEW build can start late, once — which is NOT a block.** On its first run an unknown
+  unsigned exe is held for a cloud check (Defender cloud-protection events 2010 at that
+  moment): SmoothAnnotate started 20 s–2 min late on 2026-09-27, while the install printed
+  `running: SmoothZoom` only. Tell the two apart before waiting: a **block** is a CodeIntegrity
+  3077 naming the exe (above), and waiting never ends it. No 3077 = wait and check again.
+  During the hold the file also reads as "in use", so an install run straight after another
   can fail its copy; re-run it.
 - Makes the task the **only** autostart. It seeds `%APPDATA%\SmoothZoom\settings.json` with
   `StartWithWindows: false` (only if there is no settings file yet) and removes SmoothZoom's
