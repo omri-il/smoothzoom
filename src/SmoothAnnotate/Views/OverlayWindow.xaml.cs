@@ -81,7 +81,12 @@ public partial class OverlayWindow : Window
         _currentColor = (Color)ColorConverter.ConvertFromString(_settings.PenColor);
 
         DrawCanvas.StrokeCollected += OnStrokeCollected;
-        DrawCanvas.IgnoreTouch = _settings.IgnoreTouch;
+        DrawCanvas.IgnoreTouchNearPen = _settings.IgnoreTouchNearPen;
+        // A finger draws here, so no press-and-hold right-click ring, no flick gestures
+        // (a quick stroke would turn into "back"), no tap circles in the recording
+        Stylus.SetIsPressAndHoldEnabled(this, false);
+        Stylus.SetIsFlicksEnabled(this, false);
+        Stylus.SetIsTapFeedbackEnabled(this, false);
 
         // Shape canvas mouse events
         ShapeCanvas.MouseLeftButtonDown += OnShapeMouseDown;
@@ -397,10 +402,16 @@ public partial class OverlayWindow : Window
     {
         if (!_catchInput) { _hitLayer.Data = null; return; }
         Geometry fill = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight));
-        if (ToolbarRect() is Rect hole)
-            fill = new CombinedGeometry(GeometryCombineMode.Exclude, fill, new RectangleGeometry(hole));
+        // Holes: the toolbar, and the OBS remote (its "stop drawing" button)
+        _passThroughHole = PassThroughRect();
+        foreach (var hole in new[] { ToolbarRect(), _passThroughHole })
+            if (hole is Rect r)
+                fill = new CombinedGeometry(GeometryCombineMode.Exclude, fill, new RectangleGeometry(r));
         _hitLayer.Data = fill;
     }
+
+    // Where the remote's hole was cut; the hit timer re-cuts when the remote moves
+    private Rect? _passThroughHole;
 
     /// <summary>The toolbar's area in this window's coordinates, or null while it's hidden.</summary>
     private Rect? ToolbarRect()
@@ -512,9 +523,23 @@ public partial class OverlayWindow : Window
         if (hwnd != IntPtr.Zero) OverlayService.RaiseToTop(hwnd);
     }
 
+    /// <summary>The pass-through window's area in this window's coordinates, or null
+    /// while it's closed or minimized.</summary>
+    private Rect? PassThroughRect()
+    {
+        var hwnd = PassThroughWindow();
+        if (hwnd == IntPtr.Zero || !Native.User32.IsWindowVisible(hwnd) || Native.User32.IsIconic(hwnd)
+            || !Native.User32.GetWindowRect(hwnd, out var r) || PresentationSource.FromVisual(this) == null)
+            return null;
+        return new Rect(PointFromScreen(new Point(r.Left, r.Top)), PointFromScreen(new Point(r.Right, r.Bottom)));
+    }
+
     private void OnToolbarHitCheck(object? sender, EventArgs e)
     {
         if (!_isDrawMode || _toolbar == null) return;
+
+        // The remote opened, closed or moved: move the hit layer's hole with it
+        if (PassThroughRect() != _passThroughHole) UpdateHitLayer();
 
         Native.User32.GetCursorPos(out var pt);
         var toolbarBounds = _toolbar.GetScreenBounds();
@@ -678,9 +703,11 @@ public partial class OverlayWindow : Window
 
     // --- Shape Drawing (Arrow, Rectangle, Circle) ---
 
-    /// <summary>A mouse event WPF made from a finger touch (see IgnoreTouch).</summary>
+    /// <summary>A mouse event WPF made from a touch while the pen is near: a palm
+    /// (see PenInkCanvas). Only the down is filtered. Moves and ups act only on a shape or
+    /// drag that a down started, and filtering an up could leave the mouse captured.</summary>
     private bool IsFromTouch(MouseEventArgs e) =>
-        _settings.IgnoreTouch && e.StylusDevice?.TabletDevice?.Type == TabletDeviceType.Touch;
+        e.StylusDevice?.TabletDevice?.Type == TabletDeviceType.Touch && DrawCanvas.PenIsNear;
 
     private void OnShapeMouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -786,8 +813,6 @@ public partial class OverlayWindow : Window
 
     private void OnShapeMouseMove(object sender, MouseEventArgs e)
     {
-        if (IsFromTouch(e)) return;
-
         // Handle dragging in Select mode
         if (_draggedElement != null)
         {
@@ -823,8 +848,6 @@ public partial class OverlayWindow : Window
 
     private void OnShapeMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (IsFromTouch(e)) return;
-
         // End dragging in Select mode
         if (_draggedElement != null)
         {

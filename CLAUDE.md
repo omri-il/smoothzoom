@@ -87,7 +87,8 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 |-----|--------|
 | F8 | Toggle draw mode (was F9 until 2026-09-27 — F9 is OBS zoom-to-mouse) |
 | F10 | Clear all |
-| F11 | Laser pointer |
+| F11 | Laser pointer on/off — pressed again it goes back to the mouse (until 2026-09-27 it went to the pen, so the screen stayed covered) |
+| Esc | Stop drawing (back to the mouse). While typing text, the first Esc finishes the text. Swallowed only when it stopped something, so it still reaches the app underneath otherwise |
 | F12 | Timer start/pause (double-tap = reset) |
 | Ctrl+0 | Mouse mode (click-through, toolbar collapses to dot) |
 | Ctrl+1 | Pen |
@@ -134,7 +135,7 @@ src/SmoothAnnotate/
 │   ├── User32.cs              # P/Invoke: hooks, window styles, monitors, SetWindowPos
 │   └── Kernel32.cs            # P/Invoke: GetModuleHandle
 ├── Services/
-│   ├── KeyboardHookService.cs # F8, F10-F12, Ctrl+0-8, Ctrl+V, Ctrl+Alt combos
+│   ├── KeyboardHookService.cs # F8, F10-F12, Esc, Ctrl+0-8, Ctrl+V, Ctrl+Alt combos
 │   ├── LaserService.cs        # Laser fade-out timer (single-stroke approach)
 │   ├── StopwatchService.cs    # Timer with double-tap reset
 │   ├── ConfettiService.cs     # Particle physics confetti
@@ -142,14 +143,16 @@ src/SmoothAnnotate/
 │   └── SettingsService.cs     # JSON persistence
 └── Views/
     ├── OverlayWindow.xaml(.cs)  # Fullscreen transparent overlay (InkCanvas + ShapeCanvas + ConfettiCanvas)
-    ├── PenInkCanvas.cs          # InkCanvas that ignores finger/palm touches (IgnoreTouch)
+    ├── PenInkCanvas.cs          # InkCanvas that ignores touches while the pen is near (IgnoreTouchNearPen)
     ├── ToolbarWindow.xaml(.cs)  # Horizontal dark toolbar (draggable, collapsible to dot)
     └── ToastWindow.xaml(.cs)    # Mode indicator popup
 ```
 
 ### Key Technical Patterns
-- **Click-through overlay:** `WS_EX_TRANSPARENT` toggled via Win32 `SetWindowLong`. Background: `Transparent` when click-through, `#01000000` (alpha=1) when drawing.
-- **Toolbar clickable in draw mode:** 50ms `DispatcherTimer` checks cursor position via `GetCursorPos`, temporarily sets overlay click-through when hovering over toolbar. DPI-aware using `PresentationSource.TransformToDevice`.
+- **Click-through overlay:** `WS_EX_TRANSPARENT` toggled via Win32 `SetWindowLong`. The window's background is always `Transparent`. While drawing, input is caught by `_hitLayer`, an alpha-1 (`#01000000`) fill at the bottom of the overlay's Grid. A layered window takes input only where its pixels aren't fully transparent.
+- **Toolbar clickable in draw mode — two mechanisms, both needed:**
+  - **Holes in the hit layer** (since 2026-09-27) under the toolbar and the OBS remote (`UpdateHitLayer`). A tap there falls through the overlay to the window below. **This is what makes finger taps work:** a finger doesn't hover, so the timer below never sees it coming. Before this, a tap on the toolbar landed on the canvas.
+  - **50ms `DispatcherTimer`** checks the cursor position via `GetCursorPos` and temporarily sets the overlay click-through while hovering over the toolbar or remote. DPI-aware using `PresentationSource.TransformToDevice`. It also re-cuts the remote's hole when the remote moves; the toolbar's hole follows its `LocationChanged` / `SizeChanged` / `IsVisibleChanged`.
 - **Toolbar collapse:** When mouse mode is selected, toolbar collapses to a 42px floating dot. Click dot to re-expand and return to Pen mode.
 - **Single-monitor overlay:** `MonitorFromPoint` + `GetMonitorInfo` constrains overlay to cursor's monitor when entering draw mode.
 - **WS_EX_NOACTIVATE** on overlay so toolbar keeps focus.
@@ -157,7 +160,7 @@ src/SmoothAnnotate/
 - **Delegate pinning:** Hook delegates stored as class fields to prevent GC collection.
 
 ### Settings
-Stored at `%APPDATA%\SmoothAnnotate\settings.json`. `HideToolbarWhenIdle` (default true) — see Mouse/Pointer above. `IgnoreTouch` (default true)
+Stored at `%APPDATA%\SmoothAnnotate\settings.json`. `HideToolbarWhenIdle` (default true) — see Mouse/Pointer above. `IgnoreTouchNearPen` (default true)
 and `PassThroughWindowTitle` — see "Pen and touch" below.
 
 ### Debug Log
@@ -189,6 +192,7 @@ callers at once never see "pipe busy".
 - **`draw toggle` is on/off, not F8's cycle.** It switches between pen and mouse. From the
   laser it goes to the pen, because the remote has a separate laser button
   (`ToggleDrawOnOff`).
+- **`laser toggle` = F11**: laser on, or from the laser back to the mouse (`ToggleLaser`).
 - Commands run on the UI thread through `ControlPipeServer.OnUi`, which gives up after
   1.5 s and replies `busy`. The reply is always written, with its own timer.
   ⚠️ **Until that fix, one 2 s timer covered read + handle + write.** A slow UI moment then
@@ -216,20 +220,39 @@ callers at once never see "pipe busy".
   has four buttons on this pipe: ring, draw, laser, clear. They are lit from `status`.
 
 ## Pen and touch (the laptop: HP OmniBook Ultra Flip 14, touch screen + pen)
-- **Only the pen draws** (`IgnoreTouch`, default true, `Views/PenInkCanvas.cs`). A finger or
-  palm on the drawing layer does nothing. The mouse and pen are unchanged, and a machine
-  without touch sees no difference. Two places must agree:
-  - The routed stylus events: a touch is marked handled, so no stroke is collected.
-  - The `DynamicRenderer`: it draws live ink on WPF's pen thread BEFORE those events.
-    Without its filter a finger would leave a trail that vanishes on lift-off. The pen
-    thread can't query tablets, so the touch digitizers' ids are collected on the UI
-    thread at load.
-  - Shapes, text and select ignore mouse events that came from touch (`IsFromTouch`).
+- **A finger draws, except while the pen is near** (`IgnoreTouchNearPen`, default true,
+  `Views/PenInkCanvas.cs`). Omri chose this on 2026-09-27, the same day, over the first
+  version's "only the pen draws": he wants to draw with his hand too. `false` = a finger
+  always draws.
+  - **"Near"** = the pen is in range over the overlay, or was less than 1 s ago (a palm lifts
+    a moment after the pen). The pen is watched on the whole *window*, with
+    `handledEventsToo`: in-range / in-air-move / down / move = here; out-of-range /
+    `StylusLeave` = gone. It isn't watched on the canvas alone, because a shape tool puts
+    ShapeCanvas on top and the pen's events then never reach the canvas. `StylusLeave` counts
+    as gone because over the toolbar the pen's out-of-range event goes to the toolbar.
+  - **Each touch is judged once, at touch-down, and keeps that verdict until lift-off.** A
+    palm stays ignored even if the pen leaves mid-contact, and a finger stroke never breaks
+    off halfway.
+  - **Two places make that call and must agree:**
+    - The routed stylus events: a touch is marked handled, so no stroke is collected.
+    - The `DynamicRenderer`: it draws live ink on WPF's pen thread BEFORE those events.
+      Without its filter a palm would leave a trail that vanishes on lift-off. The pen
+      thread can't query tablets, so the touch digitizers' ids are collected on the UI thread
+      at load. `PenIsNear` reads only plain fields, so the pen thread can ask it too.
+  - Shapes, text and select ignore a mouse-down that came from a touch while the pen is
+    near (`IsFromTouch`). Only the *down* is filtered: moves and ups act only on a shape or
+    drag that a down started, and filtering an up could leave the mouse captured.
+  - Press-and-hold (right-click ring), flicks (a quick stroke would become "back") and tap
+    feedback circles are switched off on the overlay (`Stylus.Set…Enabled`).
+- **Getting out of drawing on the laptop:** Esc, the toolbar's arrow button or the remote.
+  Finger taps work on all of them thanks to the hit-layer holes (Key Technical Patterns).
+  F8/F11 need Fn there (see the last bullet).
 - **The remote stays clickable while drawing** (`PassThroughWindowTitle`, default
   "מרכז השליטה של OBS"). The full-screen drawing layer would otherwise cover it, including
-  its "stop drawing" button. The 50 ms hit timer that already let clicks through to the
-  toolbar does the same over that window (`FindWindow`, looked up once a second), and
-  entering draw mode raises it above the layer.
+  its "stop drawing" button. The hit layer has a hole over that window (`PassThroughRect`,
+  re-cut by the 50 ms timer when the remote moves). The same timer also lets mouse clicks
+  through over it (`FindWindow`, looked up once a second), and entering draw mode raises it
+  above the layer.
 - **Ring size:** the laptop's `settings.json` has `HighlightRingSize: 60`. At 200%
   scaling a ring is 2× its size in pixels, and OBS shrinks that screen to 0.6× (1800 →
   1080), so 60 comes out at ~72 px in the video, matching the home PC's 70. This is a
