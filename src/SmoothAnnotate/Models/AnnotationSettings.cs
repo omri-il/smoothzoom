@@ -14,4 +14,9 @@ public class AnnotationSettings
     // Hide the toolbar (not just collapse it to a dot) whenever you aren't drawing,
     // so it never appears in OBS recordings. F8 / Ctrl+1-8 bring it back.
     public bool HideToolbarWhenIdle { get; set; } = true;
+    // On a touch screen with a pen (the laptop): fingers and palms never draw.
+    public bool IgnoreTouch { get; set; } = true;
+    // While drawing, clicks over this window go to it, not to the canvas — the OBS
+    // dashboard's remote, so its "stop drawing" button stays pressable.
+    public string PassThroughWindowTitle { get; set; } = "מרכז השליטה של OBS";
 }

@@ -9,6 +9,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>../../assets/smoothzoom.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Shared/ControlPipe.cs" Link="Shared/ControlPipe.cs" />
+  </ItemGroup>
+
 
 </Project>

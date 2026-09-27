@@ -1,12 +1,12 @@
-' Starts SmoothZoom + SmoothAnnotate from this folder, skipping any already running
-' (a second instance would pop an "already running" box). Run at logon by the
-' scheduled task "SmoothTools" that install.ps1 registers.
+' Starts SmoothZoom + SmoothAnnotate from this folder. Run at logon by the scheduled
+' task "SmoothTools" that install.ps1 registers.
+' --autostart: an app that is already running just exits quietly. That is the only
+' "already running" check - asking WMI instead failed: a process stopped a moment ago
+' is still listed while anything holds a handle to it (install.ps1's own PowerShell did),
+' so SmoothAnnotate was skipped after an update.
 Set fso = CreateObject("Scripting.FileSystemObject")
 dir = fso.GetParentFolderName(WScript.ScriptFullName)
-Set wmi = GetObject("winmgmts:")
 Set sh = CreateObject("WScript.Shell")
 For Each app In Array("SmoothZoom", "SmoothAnnotate")
-  If wmi.ExecQuery("SELECT * FROM Win32_Process WHERE Name='" & app & ".exe'").Count = 0 Then
-    sh.Run """" & dir & "\" & app & "\" & app & ".exe""", 1, False
-  End If
+  sh.Run """" & dir & "\" & app & "\" & app & ".exe"" --autostart", 1, False
 Next

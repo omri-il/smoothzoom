@@ -142,6 +142,7 @@ src/SmoothAnnotate/
 │   └── SettingsService.cs     # JSON persistence
 └── Views/
     ├── OverlayWindow.xaml(.cs)  # Fullscreen transparent overlay (InkCanvas + ShapeCanvas + ConfettiCanvas)
+    ├── PenInkCanvas.cs          # InkCanvas that ignores finger/palm touches (IgnoreTouch)
     ├── ToolbarWindow.xaml(.cs)  # Horizontal dark toolbar (draggable, collapsible to dot)
     └── ToastWindow.xaml(.cs)    # Mode indicator popup
 ```
@@ -156,7 +157,8 @@ src/SmoothAnnotate/
 - **Delegate pinning:** Hook delegates stored as class fields to prevent GC collection.
 
 ### Settings
-Stored at `%APPDATA%\SmoothAnnotate\settings.json`. `HideToolbarWhenIdle` (default true) — see Mouse/Pointer above.
+Stored at `%APPDATA%\SmoothAnnotate\settings.json`. `HideToolbarWhenIdle` (default true) — see Mouse/Pointer above. `IgnoreTouch` (default true)
+and `PassThroughWindowTitle` — see "Pen and touch" below.
 
 ### Debug Log
 Written to `%LOCALAPPDATA%\SmoothAnnotate\debug.log`
@@ -167,6 +169,62 @@ Written to `%LOCALAPPDATA%\SmoothAnnotate\debug.log`
 3. **Filled shapes** — Outline / Tinted / Solid fill mode for Rect + Circle
 4. **Export PNG** (Ctrl+E) — renders annotations to clipboard as transparent PNG
 5. **10 colors** — adds Orange, Pink, Purple, Teal, Gray to palette
+
+---
+
+## Control from other programs (OBS dashboard, Start menu, pen button)
+Both apps are controlled from outside through a **named pipe** (`src/Shared/ControlPipe.cs`,
+compiled into both via a linked `<Compile>` in each csproj). One text command goes in and
+one JSON line comes back, and every reply carries the app's current state. Only the same
+Windows user can connect (`PipeOptions.CurrentUserOnly`). There are 4 instances, so a few
+callers at once never see "pipe busy".
+
+| Pipe | Commands | Reply |
+|---|---|---|
+| `\\.\pipe\SmoothZoom.control` | `status` · `ring toggle` · `ring on` · `ring off` | `{ok, ring, auto, obs, recording}` (`auto` = the recording watcher turned it on) |
+| `\\.\pipe\SmoothAnnotate.control` | `status` · `draw toggle` · `draw off` · `laser toggle` · `clear` | `{ok, drawing, tool}` |
+
+- **`ring …` from any caller counts as "by hand"**, exactly like Ctrl+Alt+H. It takes over
+  from auto-on, so a recording's end leaves the ring alone (`SetRingByHand`).
+- **`draw toggle` is on/off, not F8's cycle.** It switches between pen and mouse. From the
+  laser it goes to the pen, because the remote has a separate laser button
+  (`ToggleDrawOnOff`).
+- Commands run on the UI thread through `ControlPipeServer.OnUi`, which gives up after
+  1.5 s and replies `busy`. The reply is always written, with its own timer.
+  ⚠️ **Until that fix, one 2 s timer covered read + handle + write.** A slow UI moment then
+  cancelled the write, and the caller got an EMPTY reply.
+- **Measured 2026-09-27:** warm replies take 1–6 ms. The first calls after an app starts
+  took up to ~1 s, so callers wait 1.5 s (`smooth.TIMEOUT` in OBS-dashboard).
+- **Command-line flags:**
+  - `--toggle`: if the app is already running, send it `ring toggle` / `draw toggle` over
+    the pipe and exit quietly. Otherwise start and switch on. This is what the Start-menu
+    entries and the pen's top button run.
+  - `--autostart`: already running = exit quietly (`start.vbs`).
+  - A plain second launch still shows the "already running" box.
+- **The OBS dashboard's remote** (OBS-dashboard repo, `smooth.py` + `POST /api/smooth`)
+  has four buttons on this pipe: ring, draw, laser, clear. They are lit from `status`.
+
+## Pen and touch (the laptop: HP OmniBook Ultra Flip 14, touch screen + pen)
+- **Only the pen draws** (`IgnoreTouch`, default true, `Views/PenInkCanvas.cs`). A finger or
+  palm on the drawing layer does nothing. The mouse and pen are unchanged, and a machine
+  without touch sees no difference. Two places must agree:
+  - The routed stylus events: a touch is marked handled, so no stroke is collected.
+  - The `DynamicRenderer`: it draws live ink on WPF's pen thread BEFORE those events.
+    Without its filter a finger would leave a trail that vanishes on lift-off. The pen
+    thread can't query tablets, so the touch digitizers' ids are collected on the UI
+    thread at load.
+  - Shapes, text and select ignore mouse events that came from touch (`IsFromTouch`).
+- **The remote stays clickable while drawing** (`PassThroughWindowTitle`, default
+  "מרכז השליטה של OBS"). The full-screen drawing layer would otherwise cover it, including
+  its "stop drawing" button. The 50 ms hit timer that already let clicks through to the
+  toolbar does the same over that window (`FindWindow`, looked up once a second), and
+  entering draw mode raises it above the layer.
+- **Ring size:** the laptop's `settings.json` has `HighlightRingSize: 60`. At 200%
+  scaling a ring is 2× its size in pixels, and OBS shrinks that screen to 0.6× (1800 →
+  1080), so 60 comes out at ~72 px in the video, matching the home PC's 70. This is a
+  per-machine value, never a code default.
+- HP's F-keys are media keys unless Fn is held, so **Fn+F8** draws there. That is why the
+  laptop is driven from the remote, the Start menu and the pen instead.
 
 ---
 
@@ -207,6 +265,9 @@ for both.
 
 1. **Build** on the laptop, from the repo root: `powershell -File deploy\publish.ps1`. It writes
    `publish\SmoothTools\` (gitignored): `SmoothZoom\`, `SmoothAnnotate\`, `start.vbs`, `install.ps1`.
+   The exe icons are `assets/*.ico`, drawn by `deploy/make_icons.py` (Pillow, run once,
+   committed): a yellow ring on a dark tile, and a pencil on a red tile. The tray icons
+   are the same icons, read back from the exe.
 2. **Laptop:** `& publish\SmoothTools\install.ps1 -Target "$env:LOCALAPPDATA\Programs\SmoothTools"`
 3. **Home PC:** `scp -r publish/SmoothTools omrii@100.111.186.101:E:/apps/SmoothTools-incoming`, then
    over SSH `powershell -ExecutionPolicy Bypass -File E:\apps\SmoothTools-incoming\install.ps1 -Target E:\apps\SmoothTools`,
@@ -216,9 +277,31 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
 - Stops both apps, waits for them to exit, and copies the new files in. Windows can hold an
   exe's file lock for a moment after the process ends, so the copy retries.
 - Registers the logon scheduled task **"SmoothTools"**, which runs `start.vbs` from the install
-  folder. `start.vbs` launches whichever of the two apps isn't already running. The task then
-  starts them in the logged-on desktop. That is why it also works over SSH, where a process
-  launched directly would run in invisible session 0.
+  folder. `start.vbs` launches both apps with `--autostart`, and one that is already running
+  exits quietly. The task starts them in the logged-on desktop. That is why it also works
+  over SSH, where a process launched directly would run in invisible session 0.
+  ⚠️ `start.vbs` used to ask WMI which apps were running. That failed after an update: a
+  process stopped a moment earlier stays listed while anything still holds a handle to it
+  (install.ps1's own PowerShell did), so SmoothAnnotate was skipped.
+- Writes two **Start-menu** entries, `Start Menu\Programs\SmoothTools\`: **"Cursor ring -
+  SmoothZoom"** and **"Draw - SmoothAnnotate"**. Both run the exe with `--toggle`, so a tap
+  switches the ring or drawing on and off. They can be pinned to the taskbar or picked for
+  the pen's top button. The names are English because WScript.Shell reads Hebrew-named
+  `.lnk` files as empty.
+- 🚨 **The laptop has Smart App Control ON** (read 2026-09-27: `Get-MpComputerStatus` →
+  `SmartAppControlState: On`; the home PC is Off). SAC blocks unsigned programs it has no
+  good cloud verdict for. **Every new build is judged again.** On 2026-09-27 it let
+  SmoothZoom run and blocked SmoothAnnotate: CodeIntegrity event 3077, "did not meet the
+  Enterprise signing level requirements". Launched by `start.vbs`, the block shows up as a
+  "Windows Script Host" error box. The check: `Get-WinEvent -LogName
+  'Microsoft-Windows-CodeIntegrity/Operational'`, event 3077 naming the exe. Never try to
+  get around SAC. The only ways forward are Omri turning it off, or a real code-signing
+  certificate.
+- ⚠️ **A NEW build starts late, once.** Microsoft Defender holds an unknown unsigned exe for
+  a cloud scan on its first run: SmoothAnnotate took ~1–2 min on 2026-09-27, while the
+  install printed `running: SmoothZoom` only. Wait and check again before debugging. The
+  file also reads as "in use" during the scan, so an install run straight after another
+  can fail its copy; re-run it.
 - Makes the task the **only** autostart. It seeds `%APPDATA%\SmoothZoom\settings.json` with
   `StartWithWindows: false` (only if there is no settings file yet) and removes SmoothZoom's
   HKCU `Run` value. A second instance would pop an "already running" box.

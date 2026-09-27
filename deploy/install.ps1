@@ -40,6 +40,25 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 Register-ScheduledTask -TaskName 'SmoothTools' -Action $action -Trigger $trigger -Principal $principal `
     -Settings $settings -Description 'SmoothZoom cursor ring + SmoothAnnotate (smoothzoom repo)' -Force | Out-Null
 
+# Start menu (and so pinnable to the taskbar, and pickable for the pen's top button):
+# each entry launches the exe with --toggle, which switches the RUNNING copy's ring /
+# drawing on or off. English names: WScript.Shell cannot read back a Hebrew-named .lnk.
+$menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'SmoothTools'
+New-Item -ItemType Directory -Force $menu | Out-Null
+$shell = New-Object -ComObject WScript.Shell
+foreach ($s in @(
+        @{ Name = 'Cursor ring - SmoothZoom'; App = 'SmoothZoom'; What = 'Cursor ring on/off' },
+        @{ Name = 'Draw - SmoothAnnotate'; App = 'SmoothAnnotate'; What = 'Drawing on/off' })) {
+    $exe = "$Target\$($s.App)\$($s.App).exe"
+    $lnk = $shell.CreateShortcut("$menu\$($s.Name).lnk")
+    $lnk.TargetPath = $exe
+    $lnk.Arguments = '--toggle'
+    $lnk.WorkingDirectory = Split-Path $exe
+    $lnk.IconLocation = "$exe,0"
+    $lnk.Description = $s.What
+    $lnk.Save()
+}
+
 Start-ScheduledTask -TaskName 'SmoothTools'
 Start-Sleep -Seconds 10   # first start of a compressed single-file exe is slow
 $running = @(Get-Process SmoothZoom, SmoothAnnotate -ErrorAction SilentlyContinue).Name

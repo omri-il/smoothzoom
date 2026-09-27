@@ -23,10 +23,14 @@ public sealed class ObsRecordingWatcher : IDisposable
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
 
     private readonly CancellationTokenSource _cts = new();
-    private bool _recording;
+    private volatile bool _recording;
+    private volatile bool _connected;
 
     /// <summary>Raised on a thread-pool thread. true = recording.</summary>
     public event Action<bool>? RecordingChanged;
+
+    public bool Connected => _connected;
+    public bool Recording => _recording;
 
     public void Start() => _ = Task.Run(() => RunAsync(_cts.Token));
 
@@ -52,6 +56,7 @@ public sealed class ObsRecordingWatcher : IDisposable
             }
 
             // OBS gone (or never there): a recording can't still be running
+            _connected = false;
             SetRecording(false);
 
             try { await Task.Delay(RetryDelay, ct); }
@@ -90,6 +95,7 @@ public sealed class ObsRecordingWatcher : IDisposable
         var identified = await ReceiveAsync(ws, ct);
         if (identified?["op"]?.GetValue<int>() != 2)
             throw new IOException("OBS refused Identify (wrong password?)");
+        _connected = true;
         Log("connected to OBS");
 
         // Current state first, then follow events

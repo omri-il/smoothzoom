@@ -68,6 +68,7 @@ public partial class OverlayWindow : Window
         _currentColor = (Color)ColorConverter.ConvertFromString(_settings.PenColor);
 
         DrawCanvas.StrokeCollected += OnStrokeCollected;
+        DrawCanvas.IgnoreTouch = _settings.IgnoreTouch;
 
         // Shape canvas mouse events
         ShapeCanvas.MouseLeftButtonDown += OnShapeMouseDown;
@@ -381,9 +382,20 @@ public partial class OverlayWindow : Window
                 _toolbar.Show();
             }
             _toolbar?.RaiseAboveOverlay();
+            RaisePassThroughWindow();
             _toolbarHitTimer.Start();
         }
     }
+
+    // --- State and on/off for the control line (OBS dashboard, Start menu, pen button) ---
+
+    public AnnotationTool CurrentTool => _currentTool;
+    public bool IsDrawMode => _isDrawMode;
+
+    /// <summary>Drawing on (pen) or off — a plain switch, unlike F8's cycle. From the
+    /// laser it goes to the pen: the remote shows the laser as its own button.</summary>
+    public void ToggleDrawOnOff() =>
+        SelectToolByNumber(_isDrawMode && _currentTool != AnnotationTool.Laser ? 0 : 1);
 
     private void ExitDrawMode()
     {
@@ -420,20 +432,55 @@ public partial class OverlayWindow : Window
         }
     }
 
+    // The pass-through window (the OBS dashboard's remote), looked up by title at most
+    // once a second — it can be opened, closed or moved at any time
+    private IntPtr _passThroughHwnd;
+    private DateTime _passThroughLookup = DateTime.MinValue;
+
+    private IntPtr PassThroughWindow()
+    {
+        if (string.IsNullOrEmpty(_settings.PassThroughWindowTitle)) return IntPtr.Zero;
+        if (DateTime.UtcNow - _passThroughLookup > TimeSpan.FromSeconds(1))
+        {
+            _passThroughHwnd = Native.User32.FindWindow(null, _settings.PassThroughWindowTitle);
+            _passThroughLookup = DateTime.UtcNow;
+        }
+        return _passThroughHwnd;
+    }
+
+    private bool CursorOverPassThrough(Native.User32.POINT pt)
+    {
+        var hwnd = PassThroughWindow();
+        if (hwnd == IntPtr.Zero || !Native.User32.IsWindowVisible(hwnd) || Native.User32.IsIconic(hwnd))
+            return false;
+        // Both sides are physical pixels: this app is per-monitor DPI aware
+        return Native.User32.GetWindowRect(hwnd, out var r)
+               && pt.X >= r.Left && pt.X < r.Right && pt.Y >= r.Top && pt.Y < r.Bottom;
+    }
+
+    private void RaisePassThroughWindow()
+    {
+        var hwnd = PassThroughWindow();
+        if (hwnd != IntPtr.Zero) OverlayService.RaiseToTop(hwnd);
+    }
+
     private void OnToolbarHitCheck(object? sender, EventArgs e)
     {
         if (!_isDrawMode || _toolbar == null) return;
 
         Native.User32.GetCursorPos(out var pt);
         var toolbarBounds = _toolbar.GetScreenBounds();
-        bool cursorOverToolbar = toolbarBounds.Contains(pt.X, pt.Y);
+        bool overToolbar = toolbarBounds.Contains(pt.X, pt.Y);
+        bool overRemote = !overToolbar && CursorOverPassThrough(pt);
+        bool cursorOverToolbar = overToolbar || overRemote;
 
         if (cursorOverToolbar && !_isOverToolbar)
         {
-            // Cursor entered toolbar area - let clicks pass through to toolbar
+            // Cursor entered toolbar (or remote) area - let clicks pass through to it
             _isOverToolbar = true;
             OverlayService.SetClickThrough(_hwnd);
-            _toolbar.RaiseAboveOverlay();
+            if (overRemote) RaisePassThroughWindow();
+            else _toolbar.RaiseAboveOverlay();
         }
         else if (!cursorOverToolbar && _isOverToolbar)
         {
@@ -583,8 +630,14 @@ public partial class OverlayWindow : Window
 
     // --- Shape Drawing (Arrow, Rectangle, Circle) ---
 
+    /// <summary>A mouse event WPF made from a finger touch (see IgnoreTouch).</summary>
+    private bool IsFromTouch(MouseEventArgs e) =>
+        _settings.IgnoreTouch && e.StylusDevice?.TabletDevice?.Type == TabletDeviceType.Touch;
+
     private void OnShapeMouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (IsFromTouch(e)) { e.Handled = true; return; }
+
         if (_currentTool == AnnotationTool.Text)
         {
             PlaceTextBox(e.GetPosition(ShapeCanvas));
@@ -685,6 +738,8 @@ public partial class OverlayWindow : Window
 
     private void OnShapeMouseMove(object sender, MouseEventArgs e)
     {
+        if (IsFromTouch(e)) return;
+
         // Handle dragging in Select mode
         if (_draggedElement != null)
         {
@@ -720,6 +775,8 @@ public partial class OverlayWindow : Window
 
     private void OnShapeMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (IsFromTouch(e)) return;
+
         // End dragging in Select mode
         if (_draggedElement != null)
         {

@@ -4,6 +4,7 @@ using SmoothZoom.Models;
 using SmoothZoom.Native;
 using SmoothZoom.Services;
 using SmoothZoom.Views;
+using SmoothShared;
 using WinForms = System.Windows.Forms;
 using Drawing = System.Drawing;
 
@@ -19,6 +20,7 @@ public partial class App : System.Windows.Application
     private CursorHighlightService? _cursorHighlight;
     private ClickTranslationService? _clickTranslation;
     private ObsRecordingWatcher? _obsWatcher;
+    private ControlPipeServer? _control;
     private bool _ringOnForRecording; // the watcher (not Ctrl+Alt+H) turned the ring on
     private HelpOverlay? _helpOverlay;
     private AppSettings _settings = new();
@@ -29,11 +31,20 @@ public partial class App : System.Windows.Application
 
         SetupCrashRecovery();
 
+        // --toggle (the Start-menu "Cursor ring" entry): flip the ring of the copy that is
+        // already running and leave quietly, or start and switch it on
+        bool toggle = e.Args.Any(a => a.Equals("--toggle", StringComparison.OrdinalIgnoreCase));
+        // --autostart (start.vbs at logon): already running is fine, say nothing
+        bool autostart = e.Args.Any(a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase));
+
         _mutex = new Mutex(true, "Global\\SmoothZoomMutex", out bool createdNew);
         if (!createdNew)
         {
-            System.Windows.MessageBox.Show("SmoothZoom is already running.", "SmoothZoom",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            if (toggle)
+                ControlPipeServer.Send(PipeName, "ring toggle");
+            else if (!autostart)
+                System.Windows.MessageBox.Show("SmoothZoom is already running.", "SmoothZoom",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
@@ -65,6 +76,47 @@ public partial class App : System.Windows.Application
             _obsWatcher.RecordingChanged += r => Dispatcher.BeginInvoke(() => OnRecordingChanged(r));
             _obsWatcher.Start();
         }
+
+        _control = new ControlPipeServer(PipeName, cmd => ControlPipeServer.OnUi(Dispatcher, () => HandleControl(cmd)));
+        _control.Start();
+
+        if (toggle) SetRingByHand(true);
+    }
+
+    // --- Control line (OBS dashboard, second launch) ---
+
+    public const string PipeName = "SmoothZoom.control";
+
+    /// <summary>
+    /// Commands: status · ring toggle · ring on · ring off. Every reply carries the
+    /// current state: {ok, ring, auto (on because OBS is recording), obs, recording}.
+    /// </summary>
+    private object HandleControl(string command)
+    {
+        switch (command)
+        {
+            case "status": break;
+            case "ring toggle": SetRingByHand(!(_cursorHighlight?.IsActive ?? false)); break;
+            case "ring on": SetRingByHand(true); break;
+            case "ring off": SetRingByHand(false); break;
+            default: return new { ok = false, error = $"unknown command: {command}" };
+        }
+        return new
+        {
+            ok = true,
+            ring = _cursorHighlight?.IsActive ?? false,
+            auto = _ringOnForRecording,
+            obs = _obsWatcher?.Connected ?? false,
+            recording = _obsWatcher?.Recording ?? false,
+        };
+    }
+
+    /// <summary>The ring switched by a person (hotkey, dashboard, Start menu) — that
+    /// takes over from the recording watcher, so a recording's end leaves it alone.</summary>
+    private void SetRingByHand(bool on)
+    {
+        _cursorHighlight?.SetActive(on);
+        _ringOnForRecording = false;
     }
 
     private void OnRecordingChanged(bool recording)
@@ -152,6 +204,18 @@ public partial class App : System.Windows.Application
 
     private static Drawing.Icon CreateIcon(bool isZoomed)
     {
+        // Not zoomed: the app's own icon (the yellow ring — the same one the Start menu
+        // shows, so it is recognisable in the tray). Zoomed: the red magnifier below.
+        if (!isZoomed && Environment.ProcessPath is { } exe)
+        {
+            try
+            {
+                var icon = Drawing.Icon.ExtractIcon(exe, 0, WinForms.SystemInformation.SmallIconSize.Width);
+                if (icon != null) return icon;
+            }
+            catch { /* fall back to the drawn icon */ }
+        }
+
         var bitmap = new Drawing.Bitmap(32, 32);
         using (var g = Drawing.Graphics.FromImage(bitmap))
         {
@@ -197,10 +261,7 @@ public partial class App : System.Windows.Application
         _keyboardHook.ZoomOutStepPressed     += () => Dispatcher.BeginInvoke(() => _zoomController?.ZoomOutStep());
         _keyboardHook.MiddleButtonChanged    += (p)  => Dispatcher.BeginInvoke(() => _zoomController?.SetMiddleDragging(p));
         _keyboardHook.HighlightTogglePressed += () => Dispatcher.BeginInvoke(() =>
-        {
-            _cursorHighlight?.Toggle();
-            _ringOnForRecording = false; // a manual toggle takes over from auto-on
-        });
+            SetRingByHand(!(_cursorHighlight?.IsActive ?? false)));
         _keyboardHook.MouseClicked           += (r) => Dispatcher.BeginInvoke(() => _cursorHighlight?.ShowClick(r));
         _keyboardHook.HelpTogglePressed      += () => Dispatcher.BeginInvoke(OnHelpToggle);
     }
@@ -240,6 +301,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _control?.Dispose();
         _obsWatcher?.Dispose();
         _cursorHighlight?.Dispose();
         _zoomController?.Dispose();

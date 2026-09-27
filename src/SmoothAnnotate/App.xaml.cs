@@ -5,6 +5,7 @@ using System.Windows.Media;
 using SmoothAnnotate.Models;
 using SmoothAnnotate.Services;
 using SmoothAnnotate.Views;
+using SmoothShared;
 using WinForms = System.Windows.Forms;
 using Drawing = System.Drawing;
 
@@ -16,6 +17,7 @@ public partial class App : System.Windows.Application
     private WinForms.NotifyIcon? _trayIcon;
     private KeyboardHookService? _keyboardHook;
     private OverlayWindow? _overlayWindow;
+    private ControlPipeServer? _control;
     private AnnotationSettings _settings = new();
 
     private static readonly string LogFile = Path.Combine(
@@ -36,21 +38,34 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
-        // Clear old log
-        try { File.Delete(LogFile); } catch { }
-        Log("=== SmoothAnnotate starting ===");
-
-        SetupCrashRecovery();
+        // --toggle (the Start-menu "Draw" entry, the pen's top button): switch drawing
+        // on/off in the copy that is already running and leave quietly
+        bool toggle = e.Args.Any(a => a.Equals("--toggle", StringComparison.OrdinalIgnoreCase));
+        // --autostart (start.vbs at logon): already running is fine, say nothing
+        bool autostart = e.Args.Any(a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase));
 
         _mutex = new Mutex(true, "Global\\SmoothAnnotateMutex", out bool createdNew);
         if (!createdNew)
         {
-            Log("ERROR: Another instance is already running");
-            System.Windows.MessageBox.Show("SmoothAnnotate is already running.", "SmoothAnnotate",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            if (toggle)
+            {
+                // Not logged: this second copy would clear the running one's log on start
+                ControlPipeServer.Send(PipeName, "draw toggle");
+            }
+            else if (!autostart)
+            {
+                System.Windows.MessageBox.Show("SmoothAnnotate is already running.", "SmoothAnnotate",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
             Shutdown();
             return;
         }
+
+        // Clear old log — only the copy that stays does this (a second launch left above)
+        try { File.Delete(LogFile); } catch { }
+        Log("=== SmoothAnnotate starting ===");
+
+        SetupCrashRecovery();
 
         try
         {
@@ -75,12 +90,44 @@ public partial class App : System.Windows.Application
 
             SetupKeyboardHook();
             Log("Keyboard hook installed - ready! Press Ctrl+Alt+Shift+D to test");
+
+            _control = new ControlPipeServer(PipeName, cmd => ControlPipeServer.OnUi(Dispatcher, () => HandleControl(cmd)));
+            _control.Start();
+            Log($"Control pipe {PipeName} listening");
+
+            if (toggle) _overlayWindow.ToggleDrawOnOff();
         }
         catch (Exception ex)
         {
             Log($"STARTUP ERROR: {ex}");
             System.Windows.MessageBox.Show($"Startup error: {ex.Message}", "SmoothAnnotate Error");
         }
+    }
+
+    // --- Control line (OBS dashboard, second launch) ---
+
+    public const string PipeName = "SmoothAnnotate.control";
+
+    /// <summary>
+    /// Commands: status · draw toggle · draw off · laser toggle · clear. Every reply
+    /// carries the current state: {ok, drawing, tool}.
+    /// </summary>
+    private object HandleControl(string command)
+    {
+        var overlay = _overlayWindow;
+        if (overlay == null) return new { ok = false, error = "not started" };
+
+        switch (command)
+        {
+            case "status": break;
+            case "draw toggle": overlay.ToggleDrawOnOff(); break;
+            case "draw off": overlay.SelectToolByNumber(0); break;
+            case "laser toggle": overlay.ToggleLaser(); break;
+            case "clear": overlay.ClearAllStrokes(); break;
+            default: return new { ok = false, error = $"unknown command: {command}" };
+        }
+        if (command != "status") Log($"control: {command}");
+        return new { ok = true, drawing = overlay.IsDrawMode, tool = overlay.CurrentTool.ToString() };
     }
 
     private void SetupCrashRecovery()
@@ -112,6 +159,17 @@ public partial class App : System.Windows.Application
 
     private static Drawing.Icon CreateIcon()
     {
+        // The app's own icon (the pen — the same one the Start menu shows)
+        if (Environment.ProcessPath is { } exe)
+        {
+            try
+            {
+                var icon = Drawing.Icon.ExtractIcon(exe, 0, WinForms.SystemInformation.SmallIconSize.Width);
+                if (icon != null) return icon;
+            }
+            catch { /* fall back to the drawn icon */ }
+        }
+
         var bitmap = new Drawing.Bitmap(32, 32);
         using (var g = Drawing.Graphics.FromImage(bitmap))
         {
@@ -173,6 +231,7 @@ public partial class App : System.Windows.Application
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
         }
+        _control?.Dispose();
         _keyboardHook?.Dispose();
         _mutex?.Dispose();
         base.OnExit(e);
