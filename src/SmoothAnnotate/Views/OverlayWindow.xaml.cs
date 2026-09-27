@@ -112,7 +112,10 @@ public partial class OverlayWindow : Window
             _toolbar?.UpdateTextSizeLabel(labels[_textSizeIndex]);
         };
         _toolbar.ConfettiRequested += TriggerConfetti;
-        _toolbar.CloseRequested += () => System.Windows.Application.Current.Shutdown();
+        // ✕ stops drawing, exactly like the toolbar's mouse button. It used to quit the
+        // whole app, which left the OBS remote's drawing buttons grey (twice on the laptop,
+        // 2026-09-27). Quitting is the tray icon's "Quit".
+        _toolbar.CloseRequested += () => OnToolbarToolSelected(AnnotationTool.None);
         // Keep the hit layer's hole on the toolbar as it's dragged, collapsed, shown or hidden
         _toolbar.LocationChanged += (_, _) => UpdateHitLayer();
         _toolbar.SizeChanged += (_, _) => UpdateHitLayer();

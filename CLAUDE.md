@@ -132,12 +132,11 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 - **Color picker** — 5 colors with glow swatches
 - **Confetti** — 60-particle burst with physics (gravity, spin, fade)
 - **Timer** — Stopwatch HUD, double-tap to reset
-- **Close** — X button in toolbar header. ⚠️ It **quits SmoothAnnotate entirely**
-  (`Application.Current.Shutdown()`), not just the toolbar: drawing buttons go grey on the
-  OBS remote until it is started again (Start menu "Draw - SmoothAnnotate", or the
-  "SmoothTools" task). The app vanished this way on the laptop twice on 2026-09-27, with
-  no crash and no Smart App Control block. So "SmoothAnnotate isn't running" = check this
-  first. Omri was offered making ✕ only stop drawing; not decided.
+- **Close** — ✕ in the toolbar header **stops drawing**, exactly like the mouse button
+  (`OnToolbarToolSelected(None)`). It must never quit the app: quitting left the OBS
+  remote's drawing buttons grey until a restart (CHANGELOG). Quitting is the tray icon's
+  "Quit" only. If "SmoothAnnotate isn't running" anyway, check that it was quit from the
+  tray, then check Smart App Control (Install / update).
 - **Paste image** — Ctrl+V pastes clipboard image as draggable element on overlay
 
 ### Structure

@@ -241,6 +241,7 @@
                 <!-- Close -->
                 <Border Width="24" Height="24" CornerRadius="12" Cursor="Hand"
                         Background="Transparent" VerticalAlignment="Center"
+                        ToolTip="Stop drawing (Esc). To quit SmoothAnnotate: its tray icon"
                         MouseLeftButtonDown="CloseButton_Click" Margin="0,0,2,0">
                     <Border.Style>
                         <Style TargetType="Border">

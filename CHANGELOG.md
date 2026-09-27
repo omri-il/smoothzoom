@@ -4,6 +4,14 @@
 keeps the rules; this file keeps why they exist — the dated incidents and decisions behind
 them. Newest first. Git history has the full detail.
 
+## 2026-09-27 (evening) — the toolbar ✕ stops drawing instead of quitting
+
+The toolbar's ✕ called `Application.Current.Shutdown()`. On the laptop SmoothAnnotate
+vanished twice that way (15:53 and 20:10: the log ends with MOUSE, with no crash and no
+Smart App Control block), and the OBS remote's drawing buttons went grey until a restart.
+Omri chose that ✕ only stops drawing, like the toolbar's mouse button. Quitting stays in
+the tray menu.
+
 ## 2026-09-27 — the ring, the OBS remote, the laptop
 
 One long day across several sessions: the tools went from "exists in the repo" to installed
