@@ -66,7 +66,15 @@ public sealed class ControlPipeServer : IDisposable
                 using var writeTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 writeTimeout.CancelAfter(TimeSpan.FromSeconds(2));
                 await WriteLineAsync(pipe, JsonSerializer.Serialize(reply), writeTimeout.Token);
-                try { pipe.WaitForPipeDrain(); } catch (IOException) { /* caller left early */ }
+
+                // Keep the pipe open until the caller has read the reply and hung up (a
+                // read that ends at 0 bytes), for at most 2 s. Never WaitForPipeDrain():
+                // it blocks a thread with no timeout, and a caller that never reads
+                // (the stuck --toggle copy before its fix, 2026-09-27) held it for good.
+                using var hangUp = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                hangUp.CancelAfter(TimeSpan.FromSeconds(2));
+                try { await WaitForHangUpAsync(pipe, hangUp.Token); }
+                catch (Exception) when (!ct.IsCancellationRequested) { /* timed out or gone */ }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -80,22 +88,35 @@ public sealed class ControlPipeServer : IDisposable
         }
     }
 
-    /// <summary>Send one command to a running instance; null when none answers.</summary>
+    /// <summary>Send one command to a running instance; null when none answers.
+    /// Safe to call from a UI thread (the second launch's OnStartup): the work runs on
+    /// the thread pool. Waiting on async pipe calls from the UI thread directly
+    /// deadlocked — their continuations queue for the very thread that is waiting.</summary>
     public static string? Send(string name, string command, int timeoutMs = 1500)
     {
-        try
+        var work = Task.Run(async () =>
         {
             using var pipe = new NamedPipeClientStream(".", name, PipeDirection.InOut,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-            pipe.Connect(timeoutMs);
             using var timeout = new CancellationTokenSource(timeoutMs);
-            WriteLineAsync(pipe, command, timeout.Token).GetAwaiter().GetResult();
-            return ReadLineAsync(pipe, timeout.Token).GetAwaiter().GetResult();
+            await pipe.ConnectAsync(timeout.Token);
+            await WriteLineAsync(pipe, command, timeout.Token);
+            return await ReadLineAsync(pipe, timeout.Token);
+        });
+        try
+        {
+            return work.Wait(timeoutMs + 500) ? work.Result : null;
         }
         catch
         {
             return null;
         }
+    }
+
+    private static async Task WaitForHangUpAsync(Stream pipe, CancellationToken ct)
+    {
+        var one = new byte[1];
+        while (await pipe.ReadAsync(one, ct) > 0) { /* anything more is ignored */ }
     }
 
     private static async Task<string> ReadLineAsync(Stream pipe, CancellationToken ct)

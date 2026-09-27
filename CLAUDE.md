@@ -193,6 +193,17 @@ callers at once never see "pipe busy".
   1.5 s and replies `busy`. The reply is always written, with its own timer.
   ⚠️ **Until that fix, one 2 s timer covered read + handle + write.** A slow UI moment then
   cancelled the write, and the caller got an EMPTY reply.
+- ⚠️ **`ControlPipeServer.Send` runs on the thread pool** (`Task.Run`). The first version
+  waited on the async pipe calls straight from the second launch's `OnStartup`, which is
+  the UI thread. Their continuations queued for that same waiting thread, so every
+  `--toggle` copy hung forever after delivering its command (2026-09-27: two copies of
+  SmoothZoom stuck).
+- ⚠️ **The server never calls `WaitForPipeDrain()`.** It blocks a thread with no timeout,
+  and those hung callers held an instance each. After replying, it waits at most 2 s for
+  the caller to hang up (`WaitForHangUpAsync`).
+- A `--toggle` launched from an SSH session (session 0) exits without reaching the
+  running copy in the desktop session. A real tap, or a test through an Interactive
+  scheduled task, works. Python's plain `open()` on the pipe does work from SSH.
 - **Measured 2026-09-27:** warm replies take 1–6 ms. The first calls after an app starts
   took up to ~1 s, so callers wait 1.5 s (`smooth.TIMEOUT` in OBS-dashboard).
 - **Command-line flags:**
@@ -290,9 +301,11 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   `.lnk` files as empty.
 - 🚨 **The laptop has Smart App Control ON** (read 2026-09-27: `Get-MpComputerStatus` →
   `SmartAppControlState: On`; the home PC is Off). SAC blocks unsigned programs it has no
-  good cloud verdict for. **Every new build is judged again.** On 2026-09-27 it let
-  SmoothZoom run and blocked SmoothAnnotate: CodeIntegrity event 3077, "did not meet the
-  Enterprise signing level requirements". Launched by `start.vbs`, the block shows up as a
+  good cloud verdict for. **Every new build is judged again, and the verdict varies.** On
+  2026-09-27 one build ran SmoothZoom and blocked SmoothAnnotate (CodeIntegrity event
+  3077, "did not meet the Enterprise signing level requirements"). The next build, with
+  only the pipe fix, was let through for both after ~20 s. So after any update, check that
+  both apps are running on the laptop. Launched by `start.vbs`, the block shows up as a
   "Windows Script Host" error box. The check: `Get-WinEvent -LogName
   'Microsoft-Windows-CodeIntegrity/Operational'`, event 3077 naming the exe. Never try to
   get around SAC. The only ways forward are Omri turning it off, or a real code-signing
