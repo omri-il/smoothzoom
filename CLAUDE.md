@@ -264,7 +264,9 @@ callers at once never see "pipe busy".
   its "stop drawing" button. The hit layer has a hole over that window (`PassThroughRect`,
   re-cut by the 50 ms timer when the remote moves). The same timer also lets mouse clicks
   through over it (`FindWindow`, looked up once a second), and entering draw mode raises it
-  above the layer.
+  above the layer. Verified with a real mouse click on the home PC (2026-09-27): ✏️ on the
+  remote switched drawing off through the layer. How: OBS-dashboard CLAUDE.md → "How the row
+  was tested".
 - **Ring size:** the laptop's `settings.json` has `HighlightRingSize: 60`. At 200%
   scaling a ring is 2× its size in pixels, and OBS shrinks that screen to 0.6× (1800 →
   1080), so 60 comes out at ~72 px in the video, matching the home PC's 70. This is a
