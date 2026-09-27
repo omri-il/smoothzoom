@@ -136,7 +136,8 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
   (`OnToolbarToolSelected(None)`). It must never quit the app: quitting left the OBS
   remote's drawing buttons grey until a restart (CHANGELOG). Quitting is the tray icon's
   "Quit" only. If "SmoothAnnotate isn't running" anyway, check that it was quit from the
-  tray, then check Smart App Control (Install / update).
+  tray, then check Smart App Control (Install / update). Verified with a real click on the
+  home PC (2026-09-27): the app kept running, drawing turned off, the log said MOUSE.
 - **Paste image** — Ctrl+V pastes clipboard image as draggable element on overlay
 
 ### Structure
@@ -394,7 +395,8 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   himself, since it's a security setting; re-read it before relying on this line). SAC blocks
   unsigned programs it has no good cloud verdict for. **Every new build is judged again, and
   the verdict varies** — a build can be blocked and the next one let through (CHANGELOG). So
-  after any update, check that both apps are running on the laptop. A block is CodeIntegrity
+  after any update, check that both apps are running on the laptop. Last seen: the ✕-fix
+  build (5d3f3f4) was let through for both apps, which ran within 18 s (2026-09-27 ~21:50). A block is CodeIntegrity
   event 3077, "did not meet the Enterprise signing level requirements". Launched by `start.vbs`, the block shows up as a
   "Windows Script Host" error box. The check: `Get-WinEvent -LogName
   'Microsoft-Windows-CodeIntegrity/Operational'`, event 3077 naming the exe. Never try to
