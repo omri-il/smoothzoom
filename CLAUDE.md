@@ -195,20 +195,32 @@ start src/SmoothAnnotate/bin/Debug/net8.0-windows/SmoothAnnotate.exe
   ⚠️ **F9 belongs to OBS** (zoom-to-mouse, OBS-dashboard repo) — never bind it here. SmoothAnnotate's
   hook passes keys on, so a shared key fires both apps at once.
 
-## Home PC deploy (where Omri records)
-The home PC has **no .NET SDK** (and C: is nearly full), so build on the laptop as
-self-contained single files and copy them over:
+## Install / update (laptop + home PC)
+Both machines run the same self-contained build — no .NET needed on the target. Only the
+**laptop** has the .NET 8 SDK (the home PC has none, and its C: is nearly full), so it builds
+for both.
 
-```bash
-dotnet publish src/SmoothZoom/SmoothZoom.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/SmoothZoom
-dotnet publish src/SmoothAnnotate/SmoothAnnotate.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/SmoothAnnotate
-```
+| Machine | Installed at |
+|---|---|
+| Laptop | `%LOCALAPPDATA%\Programs\SmoothTools` |
+| Home PC (where Omri records) | `E:\apps\SmoothTools` |
 
-- Installed at **`E:pps\SmoothTools\`** (`SmoothZoom\`, `SmoothAnnotate\`) on the home PC.
-- Started by the logon scheduled task **"SmoothTools"** (runs `E:pps\SmoothTools\start.vbs`,
-  which launches whichever of the two is not already running — safe to re-run). `schtasks /run /tn SmoothTools` over SSH starts them in Omri's desktop
-  session — a process launched straight from SSH runs in session 0 and draws nothing.
-- To redeploy: stop both (`Stop-Process -Name SmoothZoom,SmoothAnnotate`), copy the new
-  `publish/` output over, `schtasks /run /tn SmoothTools`.
-- Its `%APPDATA%\SmoothZoom\settings.json` has `StartWithWindows: false`, so the task is the
-  only autostart (a second instance would pop an "already running" box).
+1. **Build** on the laptop, from the repo root: `powershell -File deploy\publish.ps1`. It writes
+   `publish\SmoothTools\` (gitignored): `SmoothZoom\`, `SmoothAnnotate\`, `start.vbs`, `install.ps1`.
+2. **Laptop:** `& publish\SmoothTools\install.ps1 -Target "$env:LOCALAPPDATA\Programs\SmoothTools"`
+3. **Home PC:** `scp -r publish/SmoothTools omrii@100.111.186.101:E:/apps/SmoothTools-incoming`, then
+   over SSH `powershell -ExecutionPolicy Bypass -File E:\apps\SmoothTools-incoming\install.ps1 -Target E:\apps\SmoothTools`,
+   then delete `SmoothTools-incoming`.
+
+What `deploy\install.ps1` does (safe to re-run; that is how you update):
+- Stops both apps, waits for them to exit, and copies the new files in. Windows can hold an
+  exe's file lock for a moment after the process ends, so the copy retries.
+- Registers the logon scheduled task **"SmoothTools"**, which runs `start.vbs` from the install
+  folder. `start.vbs` launches whichever of the two apps isn't already running. The task then
+  starts them in the logged-on desktop. That is why it also works over SSH, where a process
+  launched directly would run in invisible session 0.
+- Makes the task the **only** autostart. It seeds `%APPDATA%\SmoothZoom\settings.json` with
+  `StartWithWindows: false` (only if there is no settings file yet) and removes SmoothZoom's
+  HKCU `Run` value. A second instance would pop an "already running" box.
+- Ends by printing `running: SmoothAnnotate, SmoothZoom`. After that,
+  `%LOCALAPPDATA%\SmoothZoom\obs.log` should say `connected to OBS` if OBS is open.
