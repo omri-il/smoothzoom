@@ -40,6 +40,11 @@ public class KeyboardHookService : IDisposable
     public event Func<bool>? EscapePressed;
     private bool _swallowEscapeUp;
 
+    // Whether you are drawing right now. Every key but F8 acts only while you are: in other
+    // programs they are ordinary keys (Ctrl+1 switches browser tabs, Ctrl+V pastes, F11 is
+    // full screen), and caught everywhere they kept switching drawing on by itself.
+    public Func<bool>? IsDrawing { get; set; }
+
     public KeyboardHookService()
     {
         _kbHookProc = KeyboardHookCallback;
@@ -93,15 +98,16 @@ public class KeyboardHookService : IDisposable
                 }
             }
 
-            if (isKeyDown)
+            if (isKeyDown && kbd.vkCode == 0x77) // F8 - Toggle draw mode, from anywhere (F9 is OBS zoom-to-mouse)
+            {
+                App.Log("F8 pressed -> DrawModeToggled");
+                DrawModeToggled?.Invoke();
+            }
+            else if (isKeyDown && IsDrawing?.Invoke() == true)
             {
                 // F-key hotkeys (no modifiers needed - simple and reliable)
                 switch (kbd.vkCode)
                 {
-                    case 0x77: // F8 - Toggle draw mode (F9 is OBS zoom-to-mouse)
-                        App.Log("F8 pressed -> DrawModeToggled");
-                        DrawModeToggled?.Invoke();
-                        break;
                     case 0x79: // F10 - Clear canvas
                         App.Log("F10 pressed -> ClearInk");
                         ClearInk?.Invoke();

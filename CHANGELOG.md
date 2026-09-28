@@ -4,6 +4,34 @@
 keeps the rules; this file keeps why they exist — the dated incidents and decisions behind
 them. Newest first. Git history has the full detail.
 
+## 2026-09-28 — separated from the OBS dashboard; nothing turns on by itself any more
+
+Omri: the ring and the drawing "keep opening by itself", and he wanted "a separation
+between the tools". The logs showed two causes, and neither was a bug in the pipe:
+
+- **Drawing:** the keyboard hook acted on Ctrl+1…8, Ctrl+V, F10–F12 and the Ctrl+Alt keys
+  in every program. The debug log that morning had `PEN` at 09:33:19 with no `F8 pressed`
+  and no `control:` line (Ctrl+1, a browser tab switch), then `IMAGE PASTED` at 09:33:31
+  (Ctrl+V with a screenshot on the clipboard, in another app). Now only F8 works
+  everywhere; the rest only while drawing.
+- **Ring:** auto-on while recording. The remote's click log has `ring:off` at 09:14:08,
+  and `obs.log` has `recording started` at 09:15:00, which switched it straight back on.
+  Omri chose "only when I turn it on": `AutoRingWhileRecording` false, applied by settings
+  v3 on the first start of the new build.
+
+He asked whether OBS could skip the toolbar, as it skips the dashboard's remote: yes, the
+same `WDA_EXCLUDEFROMCAPTURE`, now on the toolbar and the mode labels. With the toolbar out
+of the videos, the reason for hiding it completely was gone, so the default became the
+small dot (click = pen, drag = move, place remembered). The dot replaced the remote's ✏️
+button, which went with the rest of the remote's row (OBS-dashboard repo, same day).
+Verified on the home PC: OBS's own frame had nothing where the dot was on screen.
+
+The build was made on the home PC for the first time, with a portable SDK on E: (C: is
+nearly full). Two machine quirks turned up, both in CLAUDE.md: a leftover Visual Studio
+NuGet fallback folder that breaks every restore there, and `install.ps1` stopping at
+"Access is denied" on the SSH-registered logon task, which left both apps stopped until
+the task was started by hand. The script now keeps the existing task.
+
 ## 2026-09-27 (night) — a home-PC deploy that deleted E:\apps
 
 Deploying the ✕ fix to the home PC, an inline SSH command carried the upload folder's

@@ -15,6 +15,7 @@ public partial class ToastWindow : Window
             var hwnd = new WindowInteropHelper(this).Handle;
             OverlayService.HideFromAltTab(hwnd);
             OverlayService.SetClickThrough(hwnd);
+            OverlayService.HideFromCapture(hwnd, "Mode label");
         };
     }
 

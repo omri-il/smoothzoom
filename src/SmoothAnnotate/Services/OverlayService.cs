@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using SmoothAnnotate.Native;
 
 namespace SmoothAnnotate.Services;
@@ -26,6 +27,16 @@ public static class OverlayService
     {
         int exStyle = User32.GetWindowLong(hwnd, User32.GWL_EXSTYLE);
         User32.SetWindowLong(hwnd, User32.GWL_EXSTYLE, exStyle | User32.WS_EX_NOACTIVATE);
+    }
+
+    /// <summary>You see the window; OBS, screenshots and screen shares don't. For the
+    /// controls only (toolbar, dot, mode labels) — never the overlay, whose ink is the point.</summary>
+    public static void HideFromCapture(IntPtr hwnd, string name)
+    {
+        if (User32.SetWindowDisplayAffinity(hwnd, User32.WDA_EXCLUDEFROMCAPTURE))
+            App.Log($"{name}: hidden from screen capture");
+        else
+            App.Log($"{name}: HIDE FROM CAPTURE FAILED, error {Marshal.GetLastWin32Error()} (it will be recorded)");
     }
 
     public static void RaiseToTop(IntPtr hwnd)

@@ -6,8 +6,8 @@ using System.Text.Json;
 namespace SmoothShared;
 
 /// <summary>
-/// A tiny control line for other local programs (the OBS dashboard, or a second
-/// launch of this exe with --toggle): one text command in, one JSON line out, over
+/// A tiny control line for other local programs (a second
+/// launch of this exe with --toggle, from the Start menu or the pen): one text command in, one JSON line out, over
 /// the named pipe \\.\pipe\&lt;name&gt;. Only the same Windows user can connect.
 /// Compiled into both apps (linked from src/Shared in each csproj).
 /// </summary>

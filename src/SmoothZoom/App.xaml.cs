@@ -83,7 +83,7 @@ public partial class App : System.Windows.Application
         if (toggle) SetRingByHand(true);
     }
 
-    // --- Control line (OBS dashboard, second launch) ---
+    // --- Control line (Start menu, pen button: a second launch with --toggle) ---
 
     public const string PipeName = "SmoothZoom.control";
 

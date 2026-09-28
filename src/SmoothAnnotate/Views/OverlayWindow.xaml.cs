@@ -121,10 +121,9 @@ public partial class OverlayWindow : Window
         _toolbar.SizeChanged += (_, _) => UpdateHitLayer();
         _toolbar.IsVisibleChanged += (_, _) => UpdateHitLayer();
         _toolbar.Show();
-        // Shown once so it lays out and positions itself, then hidden until you draw
-        if (_settings.HideToolbarWhenIdle)
-            Dispatcher.BeginInvoke(() => { if (!_isDrawMode) _toolbar?.Hide(); },
-                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        // Shown once so it lays out and positions itself, then the dot (or nothing) until you draw
+        Dispatcher.BeginInvoke(() => { if (!_isDrawMode) ShowIdleToolbar(); },
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
         // Timer to detect when cursor is over toolbar and pass clicks through
         _toolbarHitTimer = new System.Windows.Threading.DispatcherTimer
@@ -139,7 +138,6 @@ public partial class OverlayWindow : Window
         if (tool == AnnotationTool.None)
         {
             ExitDrawMode();
-            _toolbar?.CollapseToMinimal();
             ShowModeIndicator("MOUSE");
         }
         else
@@ -438,7 +436,7 @@ public partial class OverlayWindow : Window
             RepositionToCurrentMonitor();
             SetCatchInput(true);
             OverlayService.RemoveClickThrough(_hwnd);
-            if (_settings.HideToolbarWhenIdle && _toolbar != null)
+            if (_toolbar != null)
             {
                 _toolbar.ExpandFromMinimal();
                 _toolbar.Show();
@@ -449,13 +447,13 @@ public partial class OverlayWindow : Window
         }
     }
 
-    // --- State and on/off for the control line (OBS dashboard, Start menu, pen button) ---
+    // --- State and on/off for the control line (Start menu, pen button) ---
 
     public AnnotationTool CurrentTool => _currentTool;
     public bool IsDrawMode => _isDrawMode;
 
     /// <summary>Drawing on (pen) or off — a plain switch, unlike F8's cycle. From the
-    /// laser it goes to the pen: the remote shows the laser as its own button.</summary>
+    /// laser it goes to the pen: the laser has its own switch (F11).</summary>
     public void ToggleDrawOnOff() =>
         SelectToolByNumber(_isDrawMode && _currentTool != AnnotationTool.Laser ? 0 : 1);
 
@@ -467,9 +465,22 @@ public partial class OverlayWindow : Window
         SetTool(AnnotationTool.None);
         SetCatchInput(false);
         OverlayService.SetClickThrough(_hwnd);
-        if (_settings.HideToolbarWhenIdle)
-            _toolbar?.Hide();
+        ShowIdleToolbar();
         // Stay on current monitor so annotations remain visible and positioned correctly
+    }
+
+    /// <summary>Not drawing: the toolbar shrinks to its dot (hidden from recordings, like
+    /// the toolbar), or with HideToolbarWhenIdle it goes away completely.</summary>
+    private void ShowIdleToolbar()
+    {
+        if (_toolbar == null) return;
+        if (_settings.HideToolbarWhenIdle)
+        {
+            _toolbar.Hide();
+            return;
+        }
+        _toolbar.CollapseToMinimal();
+        _toolbar.Show();
     }
 
     private void RepositionToCurrentMonitor()

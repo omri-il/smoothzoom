@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -45,15 +47,11 @@ public partial class ToolbarWindow : Window
         {
             _hwnd = new WindowInteropHelper(this).Handle;
             OverlayService.HideFromAltTab(_hwnd);
+            // It floats over the recorded screen: you see the toolbar and the dot, videos don't
+            OverlayService.HideFromCapture(_hwnd, "Toolbar");
         };
 
-        Loaded += (_, _) =>
-        {
-            // Position top-center of primary monitor work area
-            var screen = SystemParameters.WorkArea;
-            Left = screen.Left + (screen.Width - ActualWidth) / 2;
-            Top = screen.Top + 10;
-        };
+        Loaded += (_, _) => MoveToTopCenter();
 
         SetActiveColor(1);
         SetActiveTool(AnnotationTool.None);
@@ -85,9 +83,11 @@ public partial class ToolbarWindow : Window
         MainContent.Visibility = Visibility.Collapsed;
         MinimalButton.Visibility = Visibility.Visible;
         _isCollapsed = true;
-        // Re-center the small dot
+        // The dot sits wherever you last dragged it; the first time, top-center
         var screen = SystemParameters.WorkArea;
-        Left = screen.Left + (screen.Width - 42) / 2;
+        var dot = LoadDotPosition();
+        Left = dot?.X ?? screen.Left + (screen.Width - DotSize) / 2;
+        Top = dot?.Y ?? screen.Top + 10;
     }
 
     public void ExpandFromMinimal()
@@ -96,12 +96,57 @@ public partial class ToolbarWindow : Window
         MinimalButton.Visibility = Visibility.Collapsed;
         MainContent.Visibility = Visibility.Visible;
         _isCollapsed = false;
-        // Re-center the full toolbar
-        Dispatcher.BeginInvoke(new Action(() =>
+        // The full toolbar opens top-center, wherever the dot is
+        Dispatcher.BeginInvoke(new Action(MoveToTopCenter),
+            System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void MoveToTopCenter()
+    {
+        var screen = SystemParameters.WorkArea;
+        Left = screen.Left + (screen.Width - ActualWidth) / 2;
+        Top = screen.Top + 10;
+    }
+
+    // --- The dot's place, kept across restarts (in DIPs, like Left/Top) ---
+
+    private const double DotSize = 42;
+
+    private static readonly string DotFile = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "SmoothAnnotate", "dot-position.json");
+
+    private static Point? LoadDotPosition()
+    {
+        try
         {
-            var screen = SystemParameters.WorkArea;
-            Left = screen.Left + (screen.Width - ActualWidth) / 2;
-        }), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (!File.Exists(DotFile)) return null;
+            var p = JsonSerializer.Deserialize<Point>(File.ReadAllText(DotFile));
+            // A monitor that has since gone would leave the dot off screen
+            bool onScreen =
+                p.X >= SystemParameters.VirtualScreenLeft &&
+                p.Y >= SystemParameters.VirtualScreenTop &&
+                p.X + DotSize <= SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth &&
+                p.Y + DotSize <= SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight;
+            return onScreen ? p : null;
+        }
+        catch
+        {
+            return null; // unreadable: back to top-center
+        }
+    }
+
+    private static void SaveDotPosition(Point p)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(DotFile)!);
+            File.WriteAllText(DotFile, JsonSerializer.Serialize(p));
+        }
+        catch (Exception ex)
+        {
+            App.Log($"Could not save the dot's position: {ex.Message}");
+        }
     }
 
     public bool IsCollapsed => _isCollapsed;
@@ -155,11 +200,26 @@ public partial class ToolbarWindow : Window
         ToolSelected?.Invoke(AnnotationTool.None);
     }
 
+    /// <summary>The dot: drag it to move it, click it to draw.</summary>
     private void MinimalButton_Click(object sender, MouseButtonEventArgs e)
     {
+        e.Handled = true;
+        double left = Left, top = Top;
+        try
+        {
+            DragMove(); // returns when the button is released
+        }
+        catch (InvalidOperationException)
+        {
+            // the button was already up (a quick tap) — a click
+        }
+        if (Math.Abs(Left - left) + Math.Abs(Top - top) > 4)
+        {
+            SaveDotPosition(new Point(Left, Top));
+            return;
+        }
         ExpandFromMinimal();
         ToolSelected?.Invoke(AnnotationTool.Pen);
-        e.Handled = true;
     }
 
     // --- Visual state ---

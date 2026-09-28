@@ -32,7 +32,7 @@ Lightweight Windows background utility for smooth, GPU-accelerated screen zoomin
 | Ctrl+Alt+Minus | Zoom out (-0.25x) |
 | Ctrl+Alt+L | Toggle cursor tracking (default: off) |
 | Middle-click drag | Pan the zoomed view |
-| Ctrl+Alt+H | Toggle cursor highlight ring (also turns on by itself while OBS records) |
+| Ctrl+Alt+H | Toggle cursor highlight ring (the only way it comes on — no auto-on since 2026-09-28) |
 | Ctrl+Alt+/ | Show/hide help overlay |
 | Ctrl+Alt+Esc | Panic reset (instant zoom out) |
 
@@ -68,6 +68,7 @@ Stored at `%APPDATA%\SmoothZoom\settings.json`. Defaults:
 - Cursor ring: yellow `#DCFFE632`, 70 px, 4 px thick, faint fill `HighlightFill` `#30FFE632`
   (`HighlightThickness` / `HighlightFill` / `ClickRipple` / `AutoRingWhileRecording` are
   settings.json-only — the dialog carries them over untouched)
+- `AutoRingWhileRecording`: **false** (settings v3, below)
 
 ### Cursor ring, click ripple, auto-on while recording
 - The ring is an ordinary topmost click-through window, so OBS **Display Capture records it**
@@ -76,7 +77,14 @@ Stored at `%APPDATA%\SmoothZoom\settings.json`. Defaults:
   350 ms, drawn inside the ring window (which is sized for it). Only while the ring is on.
   Injected clicks (`LLMHF_INJECTED`, e.g. the magnifier's click translation) are skipped so
   one click never ripples twice.
-- **Auto-on:** `ObsRecordingWatcher` connects to `ws://127.0.0.1:<port>`, reading port and
+- ⚠️ **Auto-on is OFF** (`AutoRingWhileRecording: false`, since 2026-09-28). Omri: the ring
+  "keeps opening by itself". He had switched it off at 09:14 and the next recording at 09:15
+  switched it back on. He chose "only when I turn it on": Ctrl+Alt+H, the tray icon or the
+  Start-menu entry. Settings **v3** turns it off once, on the first start of this build (the
+  file is written back as v3), so setting `true` again by hand sticks. With it off the
+  watcher is never created: **SmoothZoom does not talk to OBS at all**, and `obs.log` gets no
+  new lines. What follows is how it works when switched back on.
+- **Auto-on (when enabled):** `ObsRecordingWatcher` connects to `ws://127.0.0.1:<port>`, reading port and
   password from OBS's own `%APPDATA%\obs-studio\plugin_config\obs-websocket\config.json` on
   every connect (no copy of the secret here). `RecordStateChanged` STARTED → ring on;
   STOPPED → ring off, **but only if the watcher turned it on** — a ring switched on with
@@ -95,14 +103,21 @@ Stored at `%APPDATA%\SmoothZoom\settings.json`. Defaults:
 Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. Designed for video tutorials with Wacom stylus support.
 
 ### Hotkeys
+⚠️ **Only F8 works in every program. Every other key below acts only while you are
+already drawing** (`KeyboardHookService.IsDrawing`, since 2026-09-28). Caught everywhere,
+they were ordinary keys in other programs: Ctrl+1 (browser tab) switched the pen on, and
+Ctrl+V with a screenshot on the clipboard pasted it onto the screen. The log showed both on
+2026-09-28 (`PEN` with no `F8 pressed` or `control:` line, then `IMAGE PASTED`). Omri: "It
+keeps just opening by itself". Esc was already safe (it acts only when it stops something).
+
 | Key | Action |
 |-----|--------|
-| F8 | Toggle draw mode (never F9 — that is OBS zoom-to-mouse) |
+| F8 | Toggle draw mode, from anywhere (never F9 — that is OBS zoom-to-mouse) |
 | F10 | Clear all |
 | F11 | Laser pointer on/off — pressed again it goes back to the mouse, never to the pen (the screen would stay covered) |
 | Esc | Stop drawing (back to the mouse). While typing text, the first Esc finishes the text. Swallowed only when it stopped something, so it still reaches the app underneath otherwise |
 | F12 | Timer start/pause (double-tap = reset) |
-| Ctrl+0 | Mouse mode (click-through; the toolbar hides — see Mouse/Pointer below) |
+| Ctrl+0 | Mouse mode (click-through; the toolbar shrinks to its dot — see Mouse/Pointer below) |
 | Ctrl+1 | Pen |
 | Ctrl+2 | Highlighter |
 | Ctrl+3 | Laser |
@@ -121,7 +136,22 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 
 ### Toolbar Features
 - **Excalidraw-style horizontal bar** at top-center of screen (draggable)
-- **Mouse/Pointer** — exits draw mode. With `HideToolbarWhenIdle` (default **on**) the toolbar **hides completely** — it sits on the recorded screen, so any visible toolbar or dot ends up in every OBS video; F8 / Ctrl+1-8 bring it back. With it off: collapses to a small floating dot; click the dot to re-expand
+- 🎥 **Hidden from screen capture** (`OverlayService.HideFromCapture`, `WDA_EXCLUDEFROMCAPTURE`,
+  since 2026-09-28): the toolbar, its dot and the mode labels (`ToastWindow`: "PEN",
+  "MOUSE"…). Omri sees them; OBS, screenshots and screen shares don't, the same as the OBS
+  remote. **Never the overlay:** its ink is what the video is for. The debug log says
+  `Toolbar: hidden from screen capture` / `Mode label: …` at start, or `… FAILED` if Windows
+  refused. **Verified on the home PC 2026-09-28:** the dot was visible at (939,10)–(981,52)
+  with affinity `0x11`. OBS's own frame of Display Capture (`GetSourceScreenshot`, that
+  monitor, 9,581 colours overall) had only 2 dark colours there and none of the dot's white
+  pen. A screenshot of any kind cannot show the dot, so that is the only way to check.
+- **Mouse/Pointer** — exits draw mode, and the toolbar shrinks to a **42 px dot**
+  (`HideToolbarWhenIdle` false, the default since 2026-09-28): **click the dot = pen, drag
+  it = move it**. It remembers its place in `%APPDATA%\SmoothAnnotate\dot-position.json`
+  (DIPs; top-center the first time, or when that place is no longer on any screen). The
+  full toolbar still opens top-center. The dot replaced the OBS remote's ✏️ button as the
+  mouse's way in. Until the capture exclusion above, the default was `true` (hide
+  completely), because a visible toolbar or dot ended up in every video.
 - **Select/Move** — drag ink strokes and shapes to reposition; arrows move as one piece (line + head)
 - **Pen** — pressure-sensitive Wacom support, subtle shadow
 - **Highlighter** — semi-transparent yellow, rectangle tip
@@ -133,8 +163,8 @@ Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. 
 - **Confetti** — 60-particle burst with physics (gravity, spin, fade)
 - **Timer** — Stopwatch HUD, double-tap to reset
 - **Close** — ✕ in the toolbar header **stops drawing**, exactly like the mouse button
-  (`OnToolbarToolSelected(None)`). It must never quit the app: quitting left the OBS
-  remote's drawing buttons grey until a restart (CHANGELOG). Quitting is the tray icon's
+  (`OnToolbarToolSelected(None)`). It must never quit the app: quitting left drawing out of
+  reach until a restart (then: the OBS remote's buttons greyed, CHANGELOG). Quitting is the tray icon's
   "Quit" only. If "SmoothAnnotate isn't running" anyway, check that it was quit from the
   tray, then check Smart App Control (Install / update). Verified with a real click on the
   home PC (2026-09-27): the app kept running, drawing turned off, the log said MOUSE.
@@ -170,15 +200,22 @@ src/SmoothAnnotate/
 - **Toolbar clickable in draw mode — two mechanisms, both needed:**
   - **Holes in the hit layer** under the toolbar and the OBS remote (`UpdateHitLayer`). A tap there falls through the overlay to the window below. **This is what makes finger taps work:** a finger doesn't hover, so the timer below never sees it coming — without the holes a tap on the toolbar lands on the canvas.
   - **50ms `DispatcherTimer`** checks the cursor position via `GetCursorPos` and temporarily sets the overlay click-through while hovering over the toolbar or remote. DPI-aware using `PresentationSource.TransformToDevice`. It also re-cuts the remote's hole when the remote moves; the toolbar's hole follows its `LocationChanged` / `SizeChanged` / `IsVisibleChanged`.
-- **Toolbar in mouse mode:** hidden (`HideToolbarWhenIdle`, the default). Only with that setting off does it collapse to a 42px floating dot; a click on the dot re-expands it and returns to Pen mode.
+- **Toolbar in mouse mode:** the 42 px dot (`ShowIdleToolbar()`, called by `ExitDrawMode()`,
+  so every way out of drawing ends there). `MinimalButton_Click` runs `DragMove()`, which
+  returns on release: moved more than 4 px = a drag (the place is saved), otherwise a click
+  (pen). With `HideToolbarWhenIdle: true` the toolbar hides completely instead.
 - **Single-monitor overlay:** `MonitorFromPoint` + `GetMonitorInfo` constrains overlay to cursor's monitor when entering draw mode.
 - **WS_EX_NOACTIVATE** on overlay so toolbar keeps focus.
 - **Arrow pairing:** `_arrowPairs` dictionary maps Line↔Polygon so Select tool moves both together.
 - **Delegate pinning:** Hook delegates stored as class fields to prevent GC collection.
 
 ### Settings
-Stored at `%APPDATA%\SmoothAnnotate\settings.json`. `HideToolbarWhenIdle` (default true) — see Mouse/Pointer above. `IgnoreTouchNearPen` (default true)
-and `PassThroughWindowTitle` — see "Pen and touch" below.
+Stored at `%APPDATA%\SmoothAnnotate\settings.json` (the home PC had none on 2026-09-28, so
+code defaults rule there; a saved file pins every value at the time it was saved — check
+the laptop's before relying on a default).
+`HideToolbarWhenIdle` (default false: the dot) — see Mouse/Pointer above. `IgnoreTouchNearPen` (default true)
+and `PassThroughWindowTitle` — see "Pen and touch" below. The dot's place is NOT a setting:
+`dot-position.json` beside it.
 
 ### Debug Log
 Written to `%LOCALAPPDATA%\SmoothAnnotate\debug.log`. It is cleared on start. A touch that
@@ -194,7 +231,13 @@ so "my finger doesn't draw" is answered there first.
 
 ---
 
-## Control from other programs (OBS dashboard, Start menu, pen button)
+## Control from other programs (Start menu, pen button)
+⚠️ **The OBS dashboard no longer controls these apps** (2026-09-28, Omri: "I want to have a
+separation between the tools"). Its remote's ring / draw / laser / clear row and its
+`smooth.py` were removed; the dot, the hotkeys, the tray and the Start menu replace them.
+One link is left on purpose: while drawing, SmoothAnnotate lets clicks through to the
+remote window (`PassThroughWindowTitle`, "Pen and touch"), so REC / stop stay pressable.
+
 Both apps are controlled from outside through a **named pipe** (`src/Shared/ControlPipe.cs`,
 compiled into both via a linked `<Compile>` in each csproj). One text command goes in and
 one JSON line comes back, and every reply carries the app's current state. Only the same
@@ -209,8 +252,8 @@ callers at once never see "pipe busy".
 - **`ring …` from any caller counts as "by hand"**, exactly like Ctrl+Alt+H. It takes over
   from auto-on, so a recording's end leaves the ring alone (`SetRingByHand`).
 - **`draw toggle` is on/off, not F8's cycle.** It switches between pen and mouse. From the
-  laser it goes to the pen, because the remote has a separate laser button
-  (`ToggleDrawOnOff`).
+  laser it goes to the pen, because the laser has its own switch (F11; the remote's laser
+  button, until 2026-09-28) (`ToggleDrawOnOff`).
 - **`laser toggle` = F11**: laser on, or from the laser back to the mouse (`ToggleLaser`).
 - Commands run on the UI thread through `ControlPipeServer.OnUi`, which gives up after
   1.5 s and replies `busy`. The reply is always written, with its own timer.
@@ -227,15 +270,13 @@ callers at once never see "pipe busy".
   running copy in the desktop session. A real tap, or a test through an Interactive
   scheduled task, works. Python's plain `open()` on the pipe does work from SSH.
 - **Measured 2026-09-27:** warm replies take 1–6 ms. The first calls after an app starts
-  took up to ~1 s, so callers wait 1.5 s (`smooth.TIMEOUT` in OBS-dashboard).
+  took up to ~1 s, so a caller should wait 1.5 s (the removed `smooth.TIMEOUT` did).
 - **Command-line flags:**
   - `--toggle`: if the app is already running, send it `ring toggle` / `draw toggle` over
     the pipe and exit quietly. Otherwise start and switch on. This is what the Start-menu
     entries and the pen's top button run.
   - `--autostart`: already running = exit quietly (`start.vbs`).
   - A plain second launch still shows the "already running" box.
-- **The OBS dashboard's remote** (OBS-dashboard repo, `smooth.py` + `POST /api/smooth`)
-  has four buttons on this pipe: ring, draw, laser, clear. They are lit from `status`.
 
 ## Pen and touch (the laptop: HP OmniBook Ultra Flip 14, touch screen + pen)
 - **A finger draws, except while the pen is near** (`IgnoreTouchNearPen`, default true,
@@ -261,12 +302,12 @@ callers at once never see "pipe busy".
     drag that a down started, and filtering an up could leave the mouse captured.
   - Press-and-hold (right-click ring), flicks (a quick stroke would become "back") and tap
     feedback circles are switched off on the overlay (`Stylus.Set…Enabled`).
-- **Getting out of drawing on the laptop:** Esc, the toolbar's arrow button or the remote.
-  Finger taps work on all of them thanks to the hit-layer holes (Key Technical Patterns).
+- **Getting out of drawing on the laptop:** Esc or the toolbar's arrow button.
+  Finger taps work on the toolbar thanks to the hit-layer holes (Key Technical Patterns).
   F8/F11 need Fn there (see the last bullet).
 - **The remote stays clickable while drawing** (`PassThroughWindowTitle`, default
   "מרכז השליטה של OBS"). The full-screen drawing layer would otherwise cover it, including
-  its "stop drawing" button. The hit layer has a hole over that window (`PassThroughRect`,
+  REC / stop (until 2026-09-28 also its "stop drawing" button). The hit layer has a hole over that window (`PassThroughRect`,
   re-cut by the 50 ms timer when the remote moves). The same timer also lets mouse clicks
   through over it (`FindWindow`, looked up once a second), and entering draw mode raises it
   above the layer. Verified with a real mouse click on the home PC (2026-09-27): ✏️ on the
@@ -278,7 +319,7 @@ callers at once never see "pipe busy".
   per-machine value, never a code default.
 - HP laptops ship with the top row as media keys (F1–F12 need Fn), so on the laptop F8 is
   most likely **Fn+F8**. Not verified on this one: its BIOS "action keys" setting needs admin
-  to read (2026-09-27). Either way the laptop is meant to be driven from the remote, the
+  to read (2026-09-27). Either way the laptop is meant to be driven from the dot, the
   Start menu and the pen.
 
 ### Testing touch without hands (`tools/touch-test.ps1`)
@@ -311,9 +352,11 @@ The script works around each quirk below:
 ## Build & Run
 
 ```bash
-# Requires the .NET 8 SDK: on the laptop, 8.0.425 in C:\Program Files\dotnet (winget,
-# 2026-09-27). A shell opened before that install lacks it on PATH: open a new one.
-# The home PC has no SDK (see "Install / update").
+# Requires the .NET 8 SDK, 8.0.425 on both machines:
+# - laptop: C:\Program Files\dotnet (winget, 2026-09-27). A shell opened before that
+#   install lacks it on PATH: open a new one.
+# - home PC: portable, E:\tools\dotnet (dotnet-install.ps1 -Version 8.0.425 -NoPath,
+#   2026-09-28; no admin, nothing on the full C:). Not on PATH — see "On the home PC" below.
 
 # Build both
 dotnet build src/SmoothZoom/SmoothZoom.csproj
@@ -323,6 +366,19 @@ dotnet build src/SmoothAnnotate/SmoothAnnotate.csproj
 start src/SmoothZoom/bin/Debug/net8.0-windows/SmoothZoom.exe
 start src/SmoothAnnotate/bin/Debug/net8.0-windows/SmoothAnnotate.exe
 ```
+
+### On the home PC (E:\tools\dotnet)
+⚠️ **A plain `dotnet restore` fails there**: `Unable to find fallback package folder
+'C:\Program Files (x86)\Microsoft Visual Studio\Shared\NuGetPackages'`. A leftover
+machine-wide `C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.FallbackLocation.config`
+names that missing folder. The env var `RestoreFallbackFolders=clear` did NOT help. What
+works: a nuget.config OUTSIDE the repo (packageSources = nuget.org, `<fallbackPackageFolders><clear /></fallbackPackageFolders>`),
+passed as `restore --configfile`, then `build` / `publish --no-restore`. Keep packages and
+CLI state on E: as well: `NUGET_PACKAGES=E:\tools\nuget-packages`,
+`DOTNET_CLI_HOME=E:\tools\dotnet-home`. So `deploy\publish.ps1` (plain `dotnet`, restores
+itself) does not run there as is. Its steps done by hand, per app: `restore -r win-x64
+--configfile …` + `publish --no-restore` with publish.ps1's flags, then copy `start.vbs` +
+`install.ps1` beside them. Done this way on 2026-09-28.
 
 ## Key Technical Details
 - **Thread affinity:** All Magnification API calls must stay on UI thread (DispatcherTimer at 16ms)
@@ -335,9 +391,10 @@ start src/SmoothAnnotate/bin/Debug/net8.0-windows/SmoothAnnotate.exe
   hook passes keys on, so a shared key fires both apps at once.
 
 ## Install / update (laptop + home PC)
-Both machines run the same self-contained build — no .NET needed on the target. Only the
-**laptop** has the .NET 8 SDK (the home PC has none, and its C: is nearly full), so it builds
-for both.
+Both machines run the same self-contained build — no .NET needed on the target. Both can
+build since 2026-09-28 (the home PC's SDK is portable, on E:, "On the home PC" above), so each
+can build and install its own copy in place; the `scp` route below is for pushing a
+laptop build to the home PC.
 
 | Machine | Installed at |
 |---|---|
@@ -382,6 +439,11 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   folder. `start.vbs` launches both apps with `--autostart`, and one that is already running
   exits quietly. The task starts them in the logged-on desktop. That is why it also works
   over SSH, where a process launched directly would run in invisible session 0.
+  ⚠️ Run from a plain desktop shell on the home PC (2026-09-28), re-registering that task
+  failed with **"Access is denied"**. It had been registered over SSH. Until then the
+  script stopped right there, with both apps already stopped and the new files copied. Now
+  it keeps the existing task when that task runs the same `start.vbs`, warns, and goes on.
+  If both apps are ever found stopped after an install, `Start-ScheduledTask SmoothTools`.
   ⚠️ Never make `start.vbs` ask WMI which apps are running: a process stopped a moment
   earlier stays listed while anything still holds a handle to it (install.ps1's own
   PowerShell does), so an app gets skipped after an update.
@@ -412,5 +474,6 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
 - Makes the task the **only** autostart. It seeds `%APPDATA%\SmoothZoom\settings.json` with
   `StartWithWindows: false` (only if there is no settings file yet) and removes SmoothZoom's
   HKCU `Run` value. A second instance would pop an "already running" box.
-- Ends by printing `running: SmoothAnnotate, SmoothZoom`. After that,
-  `%LOCALAPPDATA%\SmoothZoom\obs.log` should say `connected to OBS` if OBS is open.
+- Ends by printing `running: SmoothAnnotate, SmoothZoom`. After that, SmoothAnnotate's
+  `debug.log` should say `Toolbar: hidden from screen capture`. (`obs.log` says `connected
+  to OBS` only if `AutoRingWhileRecording` was switched back on.)

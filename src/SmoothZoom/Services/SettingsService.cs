@@ -28,6 +28,15 @@ public static class SettingsService
                 // Reset to defaults if settings are from an older version
                 if (settings.Version < 2)
                     return new AppSettings();
+                // v3: the ring no longer turns on by itself when OBS records. Once only, and
+                // written back, so setting it to true again by hand sticks.
+                if (settings.Version < 3)
+                {
+                    settings.AutoRingWhileRecording = false;
+                    settings.Version = 3;
+                    try { File.WriteAllText(SettingsFile, JsonSerializer.Serialize(settings, JsonOptions)); }
+                    catch { /* applies this run anyway; written on the next start */ }
+                }
                 return settings;
             }
         }

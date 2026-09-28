@@ -26,7 +26,7 @@ if ($src -ne (Resolve-Path $Target).Path.TrimEnd('\')) {
 $cfg = "$env:APPDATA\SmoothZoom\settings.json"
 if (-not (Test-Path $cfg)) {
     New-Item -ItemType Directory -Force (Split-Path $cfg) | Out-Null
-    '{ "Version": 2, "StartWithWindows": false }' | Set-Content $cfg -Encoding ASCII
+    '{ "Version": 3, "StartWithWindows": false }' | Set-Content $cfg -Encoding ASCII
 }
 $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 if ((Get-ItemProperty $run).PSObject.Properties.Name -contains 'SmoothZoom') { Remove-ItemProperty $run -Name SmoothZoom }
@@ -37,8 +37,17 @@ $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$Target\st
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName 'SmoothTools' -Action $action -Trigger $trigger -Principal $principal `
-    -Settings $settings -Description 'SmoothZoom cursor ring + SmoothAnnotate (smoothzoom repo)' -Force | Out-Null
+try {
+    Register-ScheduledTask -TaskName 'SmoothTools' -Action $action -Trigger $trigger -Principal $principal `
+        -Settings $settings -Description 'SmoothZoom cursor ring + SmoothAnnotate (smoothzoom repo)' -Force | Out-Null
+} catch {
+    # A task registered over SSH can't be overwritten from a plain desktop shell ("Access is
+    # denied", home PC 2026-09-28) — and stopping here left both apps stopped. The existing
+    # task does the same job when it runs this same start.vbs.
+    $have = Get-ScheduledTask -TaskName 'SmoothTools' -ErrorAction SilentlyContinue
+    if (-not $have -or $have.Actions[0].Arguments -ne "`"$Target\start.vbs`"") { throw }
+    Write-Warning "Kept the existing SmoothTools task (could not re-register it: $($_.Exception.Message))"
+}
 
 # Start menu (and so pinnable to the taskbar, and pickable for the pen's top button):
 # each entry launches the exe with --toggle, which switches the RUNNING copy's ring /

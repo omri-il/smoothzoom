@@ -104,7 +104,7 @@ public partial class App : System.Windows.Application
         }
     }
 
-    // --- Control line (OBS dashboard, second launch) ---
+    // --- Control line (Start menu, pen button: a second launch with --toggle) ---
 
     public const string PipeName = "SmoothAnnotate.control";
 
@@ -194,6 +194,9 @@ public partial class App : System.Windows.Application
     private void SetupKeyboardHook()
     {
         _keyboardHook = new KeyboardHookService();
+        // Drawing = a tool is on (draw mode with no tool is only confetti borrowing the overlay)
+        _keyboardHook.IsDrawing = () =>
+            _overlayWindow is { IsDrawMode: true } o && o.CurrentTool != AnnotationTool.None;
 
         // Core tools
         _keyboardHook.DrawModeToggled += () => Dispatcher.Invoke(() => _overlayWindow?.ToggleDrawMode());
