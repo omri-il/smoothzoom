@@ -1,7 +1,7 @@
-"""Draws the two app icons into assets/*.ico (run once; the .ico files are committed).
+"""Draws the app icon into assets/smoothzoom.ico (run once; the .ico is committed).
 
-SmoothZoom     = the yellow cursor ring it draws, on a dark tile.
-SmoothAnnotate = a white pen on a red tile.
+SmoothZoom = the yellow cursor ring it draws, on a dark tile. (The drawing app's pencil
+icon moved with it to the SmoothDraw repo on 2026-09-28.)
 
 Each .ico holds 16-256 px sizes, every size drawn at 4x and downsampled, so the
 16 px tray / Start-menu icon stays crisp. Needs Pillow:  py deploy/make_icons.py
@@ -34,28 +34,6 @@ def ring(size):
     return img.resize((size, size), Image.LANCZOS)
 
 
-def pen(size):
-    """A pencil at 45°: point lower-left, body, then an eraser band upper-right."""
-    img, d, s = tile(size, (229, 72, 77, 255))
-    k = 0.70710678
-    ux, uy = k, -k          # along the pencil, point → eraser
-    nx, ny = k, k           # across it
-    tx, ty = s * 7 / 32, s * 25 / 32   # the point
-    h = s * 3.2 / 32        # half width
-
-    def at(along, across):
-        return (tx + ux * along + nx * across, ty + uy * along + ny * across)
-
-    cone, body_end, eraser_end = s * 6 / 32, s * 20 / 32, s * 24 / 32
-    white, pink = (255, 255, 255, 255), (255, 205, 210, 255)
-    d.polygon([at(0, 0), at(cone, h), at(cone, -h)], fill=white)                       # point
-    d.polygon([at(cone + s / 64, h), at(body_end, h), at(body_end, -h), at(cone + s / 64, -h)],
-              fill=white)                                                                # body
-    d.polygon([at(body_end + s / 64, h), at(eraser_end, h), at(eraser_end, -h),
-               at(body_end + s / 64, -h)], fill=pink)                                    # eraser
-    return img.resize((size, size), Image.LANCZOS)
-
-
 def save(draw, name):
     out = ROOT / "assets" / name
     out.parent.mkdir(exist_ok=True)
@@ -67,4 +45,3 @@ def save(draw, name):
 
 if __name__ == "__main__":
     save(ring, "smoothzoom.ico")
-    save(pen, "smoothannotate.ico")

@@ -1,27 +1,48 @@
-# Installs the SmoothTools folder this script sits in (built by publish.ps1) to
-# -Target, registers the logon task "SmoothTools" and starts both apps.
-# Safe to re-run for an update: stops the running apps before copying.
-# Run it on the machine itself — over SSH is fine, the task starts the apps in
-# the logged-on desktop (a process started straight from SSH would be invisible).
+# Installs the SmoothTools folder this script sits in (built by publish.ps1) to -Target,
+# registers the logon task "SmoothTools" and starts SmoothZoom. Safe to re-run for an
+# update: it stops the running app before copying. Run it on the machine itself; over
+# SSH is fine, because the task starts the app in the logged-on desktop (a process
+# started straight from SSH would be invisible).
+#
+# Also safe to run from the install folder itself (-Target = where it sits): then it
+# copies nothing and leaves SmoothZoom running. That is how the 2026-09-28 cleanup went
+# in without a new SmoothZoom.exe.
+#
+# SmoothAnnotate is no longer here: it became SmoothDraw, with its own repo, folder,
+# logon task and Start-menu entry. This script only removes what it left behind.
 param([Parameter(Mandatory)][string]$Target)
 $ErrorActionPreference = 'Stop'
 
-$old = @(Get-Process SmoothZoom, SmoothAnnotate -ErrorAction SilentlyContinue)
-$old | Stop-Process -Force
-$old | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
-
-New-Item -ItemType Directory -Force $Target | Out-Null
-$src = (Resolve-Path $PSScriptRoot).Path.TrimEnd('\')
-if ($src -ne (Resolve-Path $Target).Path.TrimEnd('\')) {
+New-Item -ItemType Directory -Force -Path $Target | Out-Null
+$src = (Resolve-Path -LiteralPath $PSScriptRoot).Path.TrimEnd('\')
+$dst = (Resolve-Path -LiteralPath $Target).Path.TrimEnd('\')
+if ($src -ne $dst) {
+    $old = @(Get-Process SmoothZoom -ErrorAction SilentlyContinue)
+    $old | Stop-Process -Force
+    $old | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
     # Windows can hold an exe's file lock for a moment after its process has exited
     for ($i = 1; ; $i++) {
-        try { Copy-Item "$src\SmoothZoom", "$src\SmoothAnnotate" $Target -Recurse -Force; break }
+        try { Copy-Item -LiteralPath "$src\SmoothZoom" -Destination $dst -Recurse -Force; break }
         catch { if ($i -ge 10) { throw } ; Start-Sleep -Seconds 1 }
     }
-    Copy-Item "$src\start.vbs", "$src\install.ps1" $Target -Force
+    Copy-Item -LiteralPath "$src\start.vbs", "$src\install.ps1" -Destination $dst -Force
 }
 
-# SmoothZoom's own "Start with Windows" (HKCU Run) would start it twice — the
+# What SmoothAnnotate left in this install: its folder and its Start-menu entry. Only a
+# folder that really is it (named so, with its exe inside) - never anything wider.
+$leftover = Join-Path $dst 'SmoothAnnotate'
+if ((Split-Path -Leaf $leftover) -eq 'SmoothAnnotate' -and
+    (Test-Path -LiteralPath (Join-Path $leftover 'SmoothAnnotate.exe'))) {
+    Get-Process SmoothAnnotate -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Seconds 1
+    try { Remove-Item -LiteralPath $leftover -Recurse -Force; "removed $leftover" }
+    catch { Write-Warning "Could not remove $leftover yet ($($_.Exception.Message)); re-run to finish" }
+}
+$menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'SmoothTools'
+$oldLnk = Join-Path $menu 'Draw - SmoothAnnotate.lnk'
+if (Test-Path -LiteralPath $oldLnk) { Remove-Item -LiteralPath $oldLnk -Force; "removed $oldLnk" }
+
+# SmoothZoom's own "Start with Windows" (HKCU Run) would start it twice - the
 # task is the only autostart. Seed settings only when there are none yet.
 $cfg = "$env:APPDATA\SmoothZoom\settings.json"
 if (-not (Test-Path $cfg)) {
@@ -33,42 +54,36 @@ if ((Get-ItemProperty $run).PSObject.Properties.Name -contains 'SmoothZoom') { R
 
 # $env:USERDOMAIN is WORKGROUP over SSH, and a task for WORKGROUP\user never runs
 $user = "$env:COMPUTERNAME\$env:USERNAME"
-$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$Target\start.vbs`""
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$dst\start.vbs`""
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
 try {
     Register-ScheduledTask -TaskName 'SmoothTools' -Action $action -Trigger $trigger -Principal $principal `
-        -Settings $settings -Description 'SmoothZoom cursor ring + SmoothAnnotate (smoothzoom repo)' -Force | Out-Null
+        -Settings $settings -Description 'SmoothZoom cursor ring + screen zoom (smoothzoom repo)' -Force | Out-Null
 } catch {
     # A task registered over SSH can't be overwritten from a plain desktop shell ("Access is
-    # denied", home PC 2026-09-28) — and stopping here left both apps stopped. The existing
+    # denied", home PC 2026-09-28) - and stopping here left the app stopped. The existing
     # task does the same job when it runs this same start.vbs.
     $have = Get-ScheduledTask -TaskName 'SmoothTools' -ErrorAction SilentlyContinue
-    if (-not $have -or $have.Actions[0].Arguments -ne "`"$Target\start.vbs`"") { throw }
+    if (-not $have -or $have.Actions[0].Arguments -ne "`"$dst\start.vbs`"") { throw }
     Write-Warning "Kept the existing SmoothTools task (could not re-register it: $($_.Exception.Message))"
 }
 
 # Start menu (and so pinnable to the taskbar, and pickable for the pen's top button):
-# each entry launches the exe with --toggle, which switches the RUNNING copy's ring /
-# drawing on or off. English names: WScript.Shell cannot read back a Hebrew-named .lnk.
-$menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'SmoothTools'
+# the entry launches the exe with --toggle, which switches the RUNNING copy's ring on or
+# off. An English name: WScript.Shell cannot read back a Hebrew-named .lnk.
 New-Item -ItemType Directory -Force $menu | Out-Null
-$shell = New-Object -ComObject WScript.Shell
-foreach ($s in @(
-        @{ Name = 'Cursor ring - SmoothZoom'; App = 'SmoothZoom'; What = 'Cursor ring on/off' },
-        @{ Name = 'Draw - SmoothAnnotate'; App = 'SmoothAnnotate'; What = 'Drawing on/off' })) {
-    $exe = "$Target\$($s.App)\$($s.App).exe"
-    $lnk = $shell.CreateShortcut("$menu\$($s.Name).lnk")
-    $lnk.TargetPath = $exe
-    $lnk.Arguments = '--toggle'
-    $lnk.WorkingDirectory = Split-Path $exe
-    $lnk.IconLocation = "$exe,0"
-    $lnk.Description = $s.What
-    $lnk.Save()
-}
+$exe = "$dst\SmoothZoom\SmoothZoom.exe"
+$lnk = (New-Object -ComObject WScript.Shell).CreateShortcut("$menu\Cursor ring - SmoothZoom.lnk")
+$lnk.TargetPath = $exe
+$lnk.Arguments = '--toggle'
+$lnk.WorkingDirectory = Split-Path $exe
+$lnk.IconLocation = "$exe,0"
+$lnk.Description = 'Cursor ring on/off'
+$lnk.Save()
 
 Start-ScheduledTask -TaskName 'SmoothTools'
 Start-Sleep -Seconds 10   # first start of a compressed single-file exe is slow
-$running = @(Get-Process SmoothZoom, SmoothAnnotate -ErrorAction SilentlyContinue).Name
+$running = @(Get-Process SmoothZoom -ErrorAction SilentlyContinue).Name
 "running: " + ($running -join ', ')

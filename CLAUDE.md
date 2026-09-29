@@ -1,16 +1,21 @@
-# SmoothZoom + SmoothAnnotate
+# SmoothZoom
 
-Two companion WPF desktop tools for video tutorial recording: screen zoom + screen annotation overlay.
+WPF desktop tool for video tutorial recording: smooth screen zoom and a cursor ring.
 Why things are the way they are (dated incidents and decisions): `CHANGELOG.md`, not auto-loaded.
+
+➡️ **The drawing app is no longer here.** SmoothAnnotate became **SmoothDraw** on
+2026-09-28: its own repo (`github.com/omri-il/SmoothDraw`, `C:\Users\omrii\Projects\SmoothDraw`),
+with its history, and its own install, logon task and Start-menu entry. Anything about
+drawing, the toolbar, the dot, undo, touch and pen, or `touch-test.ps1` → that repo's
+CLAUDE.md. What is left of it here is only the cleanup in `deploy/install.ps1` (below).
 
 ## Repo layout
 ```
 src/SmoothZoom/        the ring + screen zoom app (below)
-src/SmoothAnnotate/    the drawing overlay app (below)
-src/Shared/ControlPipe.cs   the control pipe, compiled into both ("Control from other programs")
+src/Shared/ControlPipe.cs   the control pipe ("Control from other programs") — the SAME file
+                       is in the SmoothDraw repo, compiled into SmoothDraw: change both
 deploy/                publish.ps1 · install.ps1 · start.vbs · make_icons.py ("Install / update")
-assets/                smoothzoom.ico · smoothannotate.ico (drawn by deploy/make_icons.py)
-tools/touch-test.ps1   touch/pen checks without hands ("Testing touch without hands")
+assets/                smoothzoom.ico (drawn by deploy/make_icons.py)
 ```
 
 ## SmoothZoom (`src/SmoothZoom/`)
@@ -69,6 +74,10 @@ Stored at `%APPDATA%\SmoothZoom\settings.json`. Defaults:
   (`HighlightThickness` / `HighlightFill` / `ClickRipple` / `AutoRingWhileRecording` are
   settings.json-only — the dialog carries them over untouched)
 - `AutoRingWhileRecording`: **false** (settings v3, below)
+- **Ring size on the laptop** (HP OmniBook Ultra Flip 14): its `settings.json` has
+  `HighlightRingSize: 60`. At 200% scaling a ring is 2× its size in pixels, and OBS shrinks
+  that screen to 0.6× (1800 → 1080), so 60 comes out at ~72 px in the video, matching the
+  home PC's 70. This is a per-machine value, never a code default.
 
 ### Cursor ring, click ripple, auto-on while recording
 - The ring is an ordinary topmost click-through window, so OBS **Display Capture records it**
@@ -98,163 +107,25 @@ Stored at `%APPDATA%\SmoothZoom\settings.json`. Defaults:
 
 ---
 
-## SmoothAnnotate (`src/SmoothAnnotate/`)
-
-Transparent overlay for screen drawing, shapes, laser pointer, and fun effects. Designed for video tutorials with Wacom stylus support.
-
-### Hotkeys
-⚠️ **Only F8 works in every program. Every other key below acts only while you are
-already drawing** (`KeyboardHookService.IsDrawing`, since 2026-09-28). Caught everywhere,
-they were ordinary keys in other programs: Ctrl+1 (browser tab) switched the pen on, and
-Ctrl+V with a screenshot on the clipboard pasted it onto the screen. The log showed both on
-2026-09-28 (`PEN` with no `F8 pressed` or `control:` line, then `IMAGE PASTED`). Omri: "It
-keeps just opening by itself". Esc was already safe (it acts only when it stops something).
-
-| Key | Action |
-|-----|--------|
-| F8 | Toggle draw mode, from anywhere (never F9 — that is OBS zoom-to-mouse) |
-| F10 | Clear all |
-| F11 | Laser pointer on/off — pressed again it goes back to the mouse, never to the pen (the screen would stay covered) |
-| Esc | Stop drawing (back to the mouse). While typing text, the first Esc finishes the text. Swallowed only when it stopped something, so it still reaches the app underneath otherwise |
-| F12 | Timer start/pause (double-tap = reset) |
-| Ctrl+0 | Mouse mode (click-through; the toolbar shrinks to its dot — see Mouse/Pointer below) |
-| Ctrl+1 | Pen |
-| Ctrl+2 | Highlighter |
-| Ctrl+3 | Laser |
-| Ctrl+4 | Eraser |
-| Ctrl+5 | Arrow |
-| Ctrl+6 | Rectangle |
-| Ctrl+7 | Circle |
-| Ctrl+8 | Text |
-| Ctrl+V | Paste image from clipboard |
-| Ctrl+Alt+A | Arrow tool |
-| Ctrl+Alt+R | Rectangle tool |
-| Ctrl+Alt+O | Circle/Oval tool |
-| Ctrl+Alt+X | Text tool |
-| Ctrl+Alt+T | Timer show/hide |
-| Ctrl+Alt+1-5 | Colors: Red, Blue, Green, White, Yellow |
-
-### Toolbar Features
-- **Excalidraw-style horizontal bar** at top-center of screen (draggable)
-- 🎥 **Hidden from screen capture** (`OverlayService.HideFromCapture`, `WDA_EXCLUDEFROMCAPTURE`,
-  since 2026-09-28): the toolbar, its dot and the mode labels (`ToastWindow`: "PEN",
-  "MOUSE"…). Omri sees them; OBS, screenshots and screen shares don't, the same as the OBS
-  remote. **Never the overlay:** its ink is what the video is for. The debug log says
-  `Toolbar: hidden from screen capture` / `Mode label: …` at start, or `… FAILED` if Windows
-  refused. **Verified on the home PC 2026-09-28:** the dot was visible at (939,10)–(981,52)
-  with affinity `0x11`. OBS's own frame of Display Capture (`GetSourceScreenshot`, that
-  monitor, 9,581 colours overall) had only 2 dark colours there and none of the dot's white
-  pen. A screenshot of any kind cannot show the dot, so that is the only way to check.
-- **Mouse/Pointer** — exits draw mode, and the toolbar shrinks to a **42 px dot**
-  (`HideToolbarWhenIdle` false, the default since 2026-09-28): **click the dot = pen, drag
-  it = move it**. It remembers its place in `%APPDATA%\SmoothAnnotate\dot-position.json`
-  (DIPs; top-center the first time, or when that place is no longer on any screen). The
-  full toolbar still opens top-center. The dot replaced the OBS remote's ✏️ button as the
-  mouse's way in. Until the capture exclusion above, the default was `true` (hide
-  completely), because a visible toolbar or dot ended up in every video.
-- **Select/Move** — drag ink strokes and shapes to reposition; arrows move as one piece (line + head)
-- **Pen** — pressure-sensitive Wacom support, subtle shadow
-- **Highlighter** — semi-transparent yellow, rectangle tip
-- **Eraser** — stroke-level removal
-- **Laser** — single-stroke fade with glow, configurable fade duration
-- **Shapes** — Arrow (sharp pointy head), Rectangle, Circle — all with drop shadows
-- **Text** — Hebrew RTL auto-detect, 4 sizes (Small 24 / Medium 32 / Large 48 / XL 72)
-- **Color picker** — 5 colors with glow swatches
-- **Confetti** — 60-particle burst with physics (gravity, spin, fade)
-- **Timer** — Stopwatch HUD, double-tap to reset
-- **Close** — ✕ in the toolbar header **stops drawing**, exactly like the mouse button
-  (`OnToolbarToolSelected(None)`). It must never quit the app: quitting left drawing out of
-  reach until a restart (then: the OBS remote's buttons greyed, CHANGELOG). Quitting is the tray icon's
-  "Quit" only. If "SmoothAnnotate isn't running" anyway, check that it was quit from the
-  tray, then check Smart App Control (Install / update). Verified with a real click on the
-  home PC (2026-09-27): the app kept running, drawing turned off, the log said MOUSE.
-- **Paste image** — Ctrl+V pastes clipboard image as draggable element on overlay
-
-### Structure
-```
-src/SmoothAnnotate/
-├── App.xaml(.cs)              # Entry point, tray icon, service wiring
-├── GlobalUsings.cs            # Resolves WPF/WinForms type ambiguities
-├── Models/
-│   ├── AnnotationSettings.cs  # Settings POCO
-│   └── AnnotationTool.cs      # Tool enum (None/Pen/Highlighter/Eraser/Laser/Arrow/Rectangle/Circle/Text/Select)
-├── Native/
-│   ├── User32.cs              # P/Invoke: hooks, window styles, monitors, SetWindowPos
-│   └── Kernel32.cs            # P/Invoke: GetModuleHandle
-├── Services/
-│   ├── KeyboardHookService.cs # F8, F10-F12, Esc, Ctrl+0-8, Ctrl+V, Ctrl+Alt combos
-│   ├── LaserService.cs        # Laser fade-out timer (single-stroke approach)
-│   ├── StopwatchService.cs    # Timer with double-tap reset
-│   ├── ConfettiService.cs     # Particle physics confetti
-│   ├── OverlayService.cs      # Win32 click-through toggling, z-order
-│   └── SettingsService.cs     # JSON persistence
-└── Views/
-    ├── OverlayWindow.xaml(.cs)  # Fullscreen transparent overlay (InkCanvas + ShapeCanvas + ConfettiCanvas)
-    ├── PenInkCanvas.cs          # InkCanvas that ignores touches while the pen is near (IgnoreTouchNearPen)
-    ├── ToolbarWindow.xaml(.cs)  # Horizontal dark toolbar (draggable, collapsible to dot)
-    └── ToastWindow.xaml(.cs)    # Mode indicator popup
-```
-
-### Key Technical Patterns
-- **Click-through overlay:** `WS_EX_TRANSPARENT` toggled via Win32 `SetWindowLong`. The window's background is always `Transparent`. While drawing, input is caught by `_hitLayer`, an alpha-1 (`#01000000`) fill at the bottom of the overlay's Grid. A layered window takes input only where its pixels aren't fully transparent.
-- **Toolbar clickable in draw mode — two mechanisms, both needed:**
-  - **Holes in the hit layer** under the toolbar and the OBS remote (`UpdateHitLayer`). A tap there falls through the overlay to the window below. **This is what makes finger taps work:** a finger doesn't hover, so the timer below never sees it coming — without the holes a tap on the toolbar lands on the canvas.
-  - **50ms `DispatcherTimer`** checks the cursor position via `GetCursorPos` and temporarily sets the overlay click-through while hovering over the toolbar or remote. DPI-aware using `PresentationSource.TransformToDevice`. It also re-cuts the remote's hole when the remote moves; the toolbar's hole follows its `LocationChanged` / `SizeChanged` / `IsVisibleChanged`.
-- **Toolbar in mouse mode:** the 42 px dot (`ShowIdleToolbar()`, called by `ExitDrawMode()`,
-  so every way out of drawing ends there). `MinimalButton_Click` runs `DragMove()`, which
-  returns on release: moved more than 4 px = a drag (the place is saved), otherwise a click
-  (pen). With `HideToolbarWhenIdle: true` the toolbar hides completely instead.
-- **Single-monitor overlay:** `MonitorFromPoint` + `GetMonitorInfo` constrains overlay to cursor's monitor when entering draw mode.
-- **WS_EX_NOACTIVATE** on overlay so toolbar keeps focus.
-- **Arrow pairing:** `_arrowPairs` dictionary maps Line↔Polygon so Select tool moves both together.
-- **Delegate pinning:** Hook delegates stored as class fields to prevent GC collection.
-
-### Settings
-Stored at `%APPDATA%\SmoothAnnotate\settings.json` (the home PC had none on 2026-09-28, so
-code defaults rule there; a saved file pins every value at the time it was saved — check
-the laptop's before relying on a default).
-`HideToolbarWhenIdle` (default false: the dot) — see Mouse/Pointer above. `IgnoreTouchNearPen` (default true)
-and `PassThroughWindowTitle` — see "Pen and touch" below. The dot's place is NOT a setting:
-`dot-position.json` beside it.
-
-### Debug Log
-Written to `%LOCALAPPDATA%\SmoothAnnotate\debug.log`. It is cleared on start. A touch that
-palm rejection threw away logs `touch ignored, pen near (in range: …, last seen … ms ago)`,
-so "my finger doesn't draw" is answered there first.
-
-### Planned (Tier 1 — not yet built)
-1. **Undo/Redo** (Ctrl+Z / Ctrl+Y) — UndoService with combined ink+shape stack
-2. **Pen size toggle** — Thin/Medium/Thick buttons in toolbar
-3. **Filled shapes** — Outline / Tinted / Solid fill mode for Rect + Circle
-4. **Export PNG** (Ctrl+E) — renders annotations to clipboard as transparent PNG
-5. **10 colors** — adds Orange, Pink, Purple, Teal, Gray to palette
-
----
-
 ## Control from other programs (Start menu, pen button)
-⚠️ **The OBS dashboard no longer controls these apps** (2026-09-28, Omri: "I want to have a
+⚠️ **The OBS dashboard no longer controls this app** (2026-09-28, Omri: "I want to have a
 separation between the tools"). Its remote's ring / draw / laser / clear row and its
-`smooth.py` were removed; the dot, the hotkeys, the tray and the Start menu replace them.
-One link is left on purpose: while drawing, SmoothAnnotate lets clicks through to the
-remote window (`PassThroughWindowTitle`, "Pen and touch"), so REC / stop stay pressable.
+`smooth.py` were removed; the hotkeys, the tray and the Start menu replace them.
 
-Both apps are controlled from outside through a **named pipe** (`src/Shared/ControlPipe.cs`,
-compiled into both via a linked `<Compile>` in each csproj). One text command goes in and
-one JSON line comes back, and every reply carries the app's current state. Only the same
-Windows user can connect (`PipeOptions.CurrentUserOnly`). There are 4 instances, so a few
-callers at once never see "pipe busy".
+SmoothZoom is controlled from outside through a **named pipe** (`src/Shared/ControlPipe.cs`,
+linked into the csproj; the same file is in the SmoothDraw repo for its pipe). One text
+command goes in and one JSON line comes back, and every reply carries the app's current
+state. Only the same Windows user can connect (`PipeOptions.CurrentUserOnly`). There are 4
+instances, so a few callers at once never see "pipe busy".
 
 | Pipe | Commands | Reply |
 |---|---|---|
 | `\\.\pipe\SmoothZoom.control` | `status` · `ring toggle` · `ring on` · `ring off` | `{ok, ring, auto, obs, recording}` (`auto` = the recording watcher turned it on) |
-| `\\.\pipe\SmoothAnnotate.control` | `status` · `draw toggle` · `draw off` · `laser toggle` · `clear` | `{ok, drawing, tool}` |
 
+(SmoothDraw's pipe, `SmoothDraw.control` — until 2026-09-28 `SmoothAnnotate.control` — is
+documented in its repo.)
 - **`ring …` from any caller counts as "by hand"**, exactly like Ctrl+Alt+H. It takes over
   from auto-on, so a recording's end leaves the ring alone (`SetRingByHand`).
-- **`draw toggle` is on/off, not F8's cycle.** It switches between pen and mouse. From the
-  laser it goes to the pen, because the laser has its own switch (F11; the remote's laser
-  button, until 2026-09-28) (`ToggleDrawOnOff`).
-- **`laser toggle` = F11**: laser on, or from the laser back to the mouse (`ToggleLaser`).
 - Commands run on the UI thread through `ControlPipeServer.OnUi`, which gives up after
   1.5 s and replies `busy`. The reply is always written, with its own timer.
   ⚠️ **Never one timer across read + handle + write:** a slow UI moment cancels the write
@@ -272,80 +143,11 @@ callers at once never see "pipe busy".
 - **Measured 2026-09-27:** warm replies take 1–6 ms. The first calls after an app starts
   took up to ~1 s, so a caller should wait 1.5 s (the removed `smooth.TIMEOUT` did).
 - **Command-line flags:**
-  - `--toggle`: if the app is already running, send it `ring toggle` / `draw toggle` over
-    the pipe and exit quietly. Otherwise start and switch on. This is what the Start-menu
-    entries and the pen's top button run.
+  - `--toggle`: if the app is already running, send it `ring toggle` over the pipe and
+    exit quietly. Otherwise start and switch on. This is what the Start-menu entry and
+    the pen's top button run.
   - `--autostart`: already running = exit quietly (`start.vbs`).
   - A plain second launch still shows the "already running" box.
-
-## Pen and touch (the laptop: HP OmniBook Ultra Flip 14, touch screen + pen)
-- **A finger draws, except while the pen is near** (`IgnoreTouchNearPen`, default true,
-  `Views/PenInkCanvas.cs`). Omri's choice: he draws with his hand too, so don't go back to
-  "only the pen draws" (CHANGELOG). `false` = a finger always draws.
-  - **"Near"** = the pen is in range over the overlay, or was less than 1 s ago (a palm lifts
-    a moment after the pen). The pen is watched on the whole *window*, with
-    `handledEventsToo`: in-range / in-air-move / down / move = here; out-of-range /
-    `StylusLeave` = gone. It isn't watched on the canvas alone, because a shape tool puts
-    ShapeCanvas on top and the pen's events then never reach the canvas. `StylusLeave` counts
-    as gone because over the toolbar the pen's out-of-range event goes to the toolbar.
-  - **Each touch is judged once, at touch-down, and keeps that verdict until lift-off.** A
-    palm stays ignored even if the pen leaves mid-contact, and a finger stroke never breaks
-    off halfway.
-  - **Two places make that call and must agree:**
-    - The routed stylus events: a touch is marked handled, so no stroke is collected.
-    - The `DynamicRenderer`: it draws live ink on WPF's pen thread BEFORE those events.
-      Without its filter a palm would leave a trail that vanishes on lift-off. The pen
-      thread can't query tablets, so the touch digitizers' ids are collected on the UI thread
-      at load. `PenIsNear` reads only plain fields, so the pen thread can ask it too.
-  - Shapes, text and select ignore a mouse-down that came from a touch while the pen is
-    near (`IsFromTouch`). Only the *down* is filtered: moves and ups act only on a shape or
-    drag that a down started, and filtering an up could leave the mouse captured.
-  - Press-and-hold (right-click ring), flicks (a quick stroke would become "back") and tap
-    feedback circles are switched off on the overlay (`Stylus.Set…Enabled`).
-- **Getting out of drawing on the laptop:** Esc or the toolbar's arrow button.
-  Finger taps work on the toolbar thanks to the hit-layer holes (Key Technical Patterns).
-  F8/F11 need Fn there (see the last bullet).
-- **The remote stays clickable while drawing** (`PassThroughWindowTitle`, default
-  "מרכז השליטה של OBS"). The full-screen drawing layer would otherwise cover it, including
-  REC / stop (until 2026-09-28 also its "stop drawing" button). The hit layer has a hole over that window (`PassThroughRect`,
-  re-cut by the 50 ms timer when the remote moves). The same timer also lets mouse clicks
-  through over it (`FindWindow`, looked up once a second), and entering draw mode raises it
-  above the layer. Verified with a real mouse click on the home PC (2026-09-27): ✏️ on the
-  remote switched drawing off through the layer. How: OBS-dashboard CLAUDE.md → "How the row
-  was tested".
-- **Ring size:** the laptop's `settings.json` has `HighlightRingSize: 60`. At 200%
-  scaling a ring is 2× its size in pixels, and OBS shrinks that screen to 0.6× (1800 →
-  1080), so 60 comes out at ~72 px in the video, matching the home PC's 70. This is a
-  per-machine value, never a code default.
-- HP laptops ship with the top row as media keys (F1–F12 need Fn), so on the laptop F8 is
-  most likely **Fn+F8**. Not verified on this one: its BIOS "action keys" setting needs admin
-  to read (2026-09-27). Either way the laptop is meant to be driven from the dot, the
-  Start menu and the pen.
-
-### Testing touch without hands (`tools/touch-test.ps1`)
-`powershell -ExecutionPolicy Bypass -File tools\touch-test.ps1 [-Steps finger,palm,laser,esc,toolbar]`
-drives the **running** SmoothAnnotate. It uses the control pipe, simulated finger strokes
-(`InjectTouchInput`), a simulated pen (`CreateSyntheticPointerDevice`) and simulated keys. It
-checks the screen for red ink and the log for `touch ignored`, then prints PASS/FAIL per
-check. It takes over the screen for ~30 s and presses Esc, so **tell Omri before running it**.
-The script works around each quirk below:
-- **WPF sees neither the injected-touch device nor the synthetic pen until its device list
-  refreshes**, a few seconds after the synthetic pen is created. Until then every injected
-  touch is dropped silently: no ink and no log line, which looks exactly like a bug in the
-  app. The warm-up keeps stroking until one draws.
-- **Ink over existing ink can't be measured** by counting red pixels, so the canvas is
-  cleared before every measured stroke.
-- **Long, fast, diagonal injected strokes were sometimes lost** before reaching WPF. It was
-  never reproducible with short horizontal ones, and the mouse drew everywhere, so this is
-  the injection, not the app. All strokes in the script are short and horizontal.
-- **A palm with no ink isn't proof on its own**: the injected touch can also be dropped
-  upstream. The script says which happened ("the app ignored it" = a new `touch ignored`
-  line).
-- The OBS remote is excluded from screen capture: screenshots never show it, but it is
-  there and it is a hole in the drawing layer. The script keeps strokes clear of it.
-- PowerShell traps hit on the way: `$null` passed to a `string` P/Invoke parameter arrives
-  as `""` (use `[NullString]::Value`). `$r` and `$R` are the same variable. An exception on
-  a background .NET thread kills the whole script, results included.
 
 ---
 
@@ -358,13 +160,8 @@ The script works around each quirk below:
 # - home PC: portable, E:\tools\dotnet (dotnet-install.ps1 -Version 8.0.425 -NoPath,
 #   2026-09-28; no admin, nothing on the full C:). Not on PATH — see "On the home PC" below.
 
-# Build both
 dotnet build src/SmoothZoom/SmoothZoom.csproj
-dotnet build src/SmoothAnnotate/SmoothAnnotate.csproj
-
-# Run (can run both simultaneously)
 start src/SmoothZoom/bin/Debug/net8.0-windows/SmoothZoom.exe
-start src/SmoothAnnotate/bin/Debug/net8.0-windows/SmoothAnnotate.exe
 ```
 
 ### On the home PC (E:\tools\dotnet)
@@ -372,23 +169,33 @@ start src/SmoothAnnotate/bin/Debug/net8.0-windows/SmoothAnnotate.exe
 'C:\Program Files (x86)\Microsoft Visual Studio\Shared\NuGetPackages'`. A leftover
 machine-wide `C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.FallbackLocation.config`
 names that missing folder. The env var `RestoreFallbackFolders=clear` did NOT help. What
-works: a nuget.config OUTSIDE the repo (packageSources = nuget.org, `<fallbackPackageFolders><clear /></fallbackPackageFolders>`),
-passed as `restore --configfile`, then `build` / `publish --no-restore`. Keep packages and
-CLI state on E: as well: `NUGET_PACKAGES=E:\tools\nuget-packages`,
-`DOTNET_CLI_HOME=E:\tools\dotnet-home`. So `deploy\publish.ps1` (plain `dotnet`, restores
-itself) does not run there as is. Its steps done by hand, per app: `restore -r win-x64
---configfile …` + `publish --no-restore` with publish.ps1's flags, then copy `start.vbs` +
-`install.ps1` beside them. Done this way on 2026-09-28.
+works: a nuget.config OUTSIDE the repo — **`E:\tools\nuget-clean.config`** (since
+2026-09-28: packageSources = nuget.org only, `<fallbackPackageFolders><clear /></fallbackPackageFolders>`,
+and `globalPackagesFolder` = `E:\tools\nuget-packages`, so packages stay off the full C:) —
+passed as `restore --configfile`, then `build` / `publish --no-restore`. Keep the CLI's own
+state on E: as well: `DOTNET_CLI_HOME=E:\tools\dotnet-home`.
+- **Release, one command** (since 2026-09-28 `publish.ps1` takes the SDK and the config,
+  and does the restore itself):
+  `$env:DOTNET_CLI_HOME='E:\tools\dotnet-home'; powershell -File deploy\publish.ps1 -Dotnet E:\tools\dotnet\dotnet.exe -NuGetConfig E:\tools\nuget-clean.config`
+  (~16 s). Before that, its steps were done by hand (restore + `publish --no-restore`,
+  then `start.vbs` + `install.ps1` copied beside them).
 
 ## Key Technical Details
 - **Thread affinity:** All Magnification API calls must stay on UI thread (DispatcherTimer at 16ms)
 - **Crash recovery:** SmoothZoom resets zoom on startup + on unhandled exceptions
-- **DPI awareness:** PerMonitorV2 via ApplicationHighDpiMode project property
+- ⚠️ **DPI awareness: System-aware, NOT PerMonitorV2** (read 2026-09-28 on the home PC: its
+  windows report awareness 1 at 96 DPI). The csproj's `ApplicationHighDpiMode PerMonitorV2`,
+  which this line used to credit, only feeds WinForms' startup code; a WPF app takes its
+  DPI mode from the manifest, and `app.manifest` declares none. On the home PC the main
+  screen is 100 %, so Win32 coordinates there are its real pixels; the 150 % left screen
+  is scaled by Windows.
 - **Easing:** Cubic ease-in-out for zoom animation
 - **Cursor tracking:** Lerp with adaptive snapping (eliminates sub-pixel jitter when still)
-- **No hotkey conflicts:** SmoothZoom uses Ctrl+Alt, SmoothAnnotate uses F-keys + Ctrl+number (different patterns).
-  ⚠️ **F9 belongs to OBS** (zoom-to-mouse, OBS-dashboard repo) — never bind it here. SmoothAnnotate's
-  hook passes keys on, so a shared key fires both apps at once.
+- **No hotkey conflicts:** SmoothZoom uses Ctrl+Alt, SmoothDraw uses F-keys + Ctrl+number (different patterns).
+  ⚠️ **F9 belongs to OBS** (zoom-to-mouse, OBS-dashboard repo) — never bind it here.
+  SmoothDraw's hook passes F8 on (and every key while you are not drawing), so a shared key
+  fires both apps at once. SmoothDraw's undo is Ctrl+Z **without** Alt, so Ctrl+Alt+Z stays
+  this app's.
 
 ## Install / update (laptop + home PC)
 Both machines run the same self-contained build — no .NET needed on the target. Both can
@@ -401,11 +208,13 @@ laptop build to the home PC.
 | Laptop | `%LOCALAPPDATA%\Programs\SmoothTools` |
 | Home PC (where Omri records) | `E:\apps\SmoothTools` |
 
-1. **Build** on the laptop, from the repo root: `powershell -File deploy\publish.ps1`. It writes
-   `publish\SmoothTools\` (gitignored): `SmoothZoom\`, `SmoothAnnotate\`, `start.vbs`, `install.ps1`.
-   The exe icons are `assets/*.ico`, drawn by `deploy/make_icons.py` (Pillow, run once,
-   committed): a yellow ring on a dark tile, and a pencil on a red tile. The tray icons
-   are the same icons, read back from the exe.
+(The folder keeps its old name, SmoothTools, from when both apps lived in it.)
+
+1. **Build**, from the repo root: `powershell -File deploy\publish.ps1` (the home PC: the
+   one command in "On the home PC"). It writes `publish\SmoothTools\` (gitignored):
+   `SmoothZoom\`, `start.vbs`, `install.ps1`. The exe icon is `assets/smoothzoom.ico`, drawn
+   by `deploy/make_icons.py` (Pillow, run once, committed; re-running it gives the same
+   bytes): a yellow ring on a dark tile. The tray icon is the same icon, read back from the exe.
 2. **Laptop:** `& publish\SmoothTools\install.ps1 -Target "$env:LOCALAPPDATA\Programs\SmoothTools"`
 3. **Home PC:** `scp -r publish/SmoothTools omrii@100.111.186.101:E:/apps/SmoothTools-incoming-<unique>`, then
    over SSH `powershell -ExecutionPolicy Bypass -File E:\apps\SmoothTools-incoming-<unique>\install.ps1 -Target E:\apps\SmoothTools`,
@@ -414,7 +223,7 @@ laptop build to the home PC.
    exist first** — two sessions may be told "update the home PC" at once. `scp -r` into an
    existing folder nests the copy (`…-incoming\SmoothTools\…`) instead of failing, and the
    other session's cleanup can delete it half-written. An `install.ps1` run from a partial
-   copy stops both apps first, then copies broken or missing files over the good install.
+   copy stops the app first, then copies broken or missing files over the good install.
    🚨 **Never put the upload folder's name in an inline SSH command as a variable** (e.g.
    `"… Remove-Item -Recurse -Force E:\apps\\$IN"` from bash). On 2026-09-27 the backslashes
    were eaten on the way, PowerShell received `E:\apps$IN`, `$IN` was an empty PowerShell
@@ -433,31 +242,43 @@ laptop build to the home PC.
    once, add them to `deploy/`.
 
 What `deploy\install.ps1` does (safe to re-run; that is how you update):
-- Stops both apps, waits for them to exit, and copies the new files in. Windows can hold an
+- Stops SmoothZoom, waits for it to exit, and copies the new files in. Windows can hold an
   exe's file lock for a moment after the process ends, so the copy retries.
+  **Run from the install folder itself** (`-Target` = where the script sits) it copies
+  nothing and leaves SmoothZoom running — how the 2026-09-28 cleanup went in without a new
+  `SmoothZoom.exe` (a new build would get a new Smart App Control verdict on the laptop).
+- **Removes what SmoothAnnotate left** (since 2026-09-28): the install's `SmoothAnnotate\`
+  folder — only a folder of that name with `SmoothAnnotate.exe` inside, deleted with
+  `-LiteralPath`; a locked one warns and is finished by a re-run — and the Start-menu entry
+  `SmoothTools\Draw - SmoothAnnotate.lnk`. It no longer starts, stops or copies
+  SmoothAnnotate. ⚠️ **On a machine that still has SmoothAnnotate, install SmoothDraw
+  first** (its CLAUDE.md → Install / update) and check it runs; only then this.
 - Registers the logon scheduled task **"SmoothTools"**, which runs `start.vbs` from the install
-  folder. `start.vbs` launches both apps with `--autostart`, and one that is already running
-  exits quietly. The task starts them in the logged-on desktop. That is why it also works
-  over SSH, where a process launched directly would run in invisible session 0.
+  folder. `start.vbs` launches SmoothZoom with `--autostart` (only if the exe is there: a
+  missing one would pop a "file not found" box, and the task stays blocked while it is
+  open), and one that is already running exits quietly. The task starts it in the logged-on
+  desktop. That is why it also works over SSH, where a process launched directly would run
+  in invisible session 0.
   ⚠️ Run from a plain desktop shell on the home PC (2026-09-28), re-registering that task
   failed with **"Access is denied"**. It had been registered over SSH. Until then the
-  script stopped right there, with both apps already stopped and the new files copied. Now
+  script stopped right there, with the apps already stopped and the new files copied. Now
   it keeps the existing task when that task runs the same `start.vbs`, warns, and goes on.
-  If both apps are ever found stopped after an install, `Start-ScheduledTask SmoothTools`.
+  If the app is ever found stopped after an install, `Start-ScheduledTask SmoothTools`.
   ⚠️ Never make `start.vbs` ask WMI which apps are running: a process stopped a moment
   earlier stays listed while anything still holds a handle to it (install.ps1's own
   PowerShell does), so an app gets skipped after an update.
-- Writes two **Start-menu** entries, `Start Menu\Programs\SmoothTools\`: **"Cursor ring -
-  SmoothZoom"** and **"Draw - SmoothAnnotate"**. Both run the exe with `--toggle`, so a tap
-  switches the ring or drawing on and off. They can be pinned to the taskbar or picked for
-  the pen's top button. The names are English because WScript.Shell reads Hebrew-named
-  `.lnk` files as empty.
+  ⚠️ The task runs at Task Scheduler's default priority, so SmoothZoom (started through
+  `wscript`) runs **BelowNormal** (seen 2026-09-28). SmoothDraw's task asks for normal.
+- Writes the **Start-menu** entry `Start Menu\Programs\SmoothTools\Cursor ring - SmoothZoom`.
+  It runs the exe with `--toggle`, so a tap switches the ring on and off. It can be pinned
+  to the taskbar or picked for the pen's top button. The name is English because
+  WScript.Shell reads Hebrew-named `.lnk` files as empty.
 - 🚨 **The laptop has Smart App Control ON** (last read 2026-09-27 15:49: `Get-MpComputerStatus` →
   `SmartAppControlState: On`; the home PC is Off. Omri was given the steps to turn it off
   himself, since it's a security setting; re-read it before relying on this line). SAC blocks
   unsigned programs it has no good cloud verdict for. **Every new build is judged again, and
   the verdict varies** — a build can be blocked and the next one let through (CHANGELOG). So
-  after any update, check that both apps are running on the laptop. Last seen: the ✕-fix
+  after any update, check that the app is running on the laptop. Last seen: the ✕-fix
   build (5d3f3f4) was let through for both apps, which ran within 18 s (2026-09-27 ~21:50). A block is CodeIntegrity
   event 3077, "did not meet the Enterprise signing level requirements". Launched by `start.vbs`, the block shows up as a
   "Windows Script Host" error box. The check: `Get-WinEvent -LogName
@@ -466,14 +287,13 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   certificate.
 - ⚠️ **A NEW build can start late, once — which is NOT a block.** On its first run an unknown
   unsigned exe is held for a cloud check (Defender cloud-protection events 2010 at that
-  moment): it starts 20 s–2 min late, and the install prints only the other app (e.g.
-  `running: SmoothZoom`). Tell the two apart before waiting: a **block** is a CodeIntegrity
+  moment): it starts 20 s–2 min late, and the install prints no app on its `running:` line.
+  Tell the two apart before waiting: a **block** is a CodeIntegrity
   3077 naming the exe (above), and waiting never ends it. No 3077 = wait and check again.
   During the hold the file also reads as "in use", so an install run straight after another
   can fail its copy; re-run it.
 - Makes the task the **only** autostart. It seeds `%APPDATA%\SmoothZoom\settings.json` with
   `StartWithWindows: false` (only if there is no settings file yet) and removes SmoothZoom's
   HKCU `Run` value. A second instance would pop an "already running" box.
-- Ends by printing `running: SmoothAnnotate, SmoothZoom`. After that, SmoothAnnotate's
-  `debug.log` should say `Toolbar: hidden from screen capture`. (`obs.log` says `connected
-  to OBS` only if `AutoRingWhileRecording` was switched back on.)
+- Ends by printing `running: SmoothZoom`. (`obs.log` says `connected to OBS` only if
+  `AutoRingWhileRecording` was switched back on.)

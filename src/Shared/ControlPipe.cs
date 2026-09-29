@@ -9,7 +9,8 @@ namespace SmoothShared;
 /// A tiny control line for other local programs (a second
 /// launch of this exe with --toggle, from the Start menu or the pen): one text command in, one JSON line out, over
 /// the named pipe \\.\pipe\&lt;name&gt;. Only the same Windows user can connect.
-/// Compiled into both apps (linked from src/Shared in each csproj).
+/// The same file is in the SmoothDraw repo (src/Shared/ControlPipe.cs), compiled into
+/// SmoothDraw: change both. (One repo until 2026-09-28, when the drawing app moved out.)
 /// </summary>
 public sealed class ControlPipeServer : IDisposable
 {

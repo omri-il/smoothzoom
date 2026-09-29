@@ -1,8 +1,41 @@
-# SmoothZoom + SmoothAnnotate — history
+# SmoothZoom — history
 
 **Not auto-loaded.** Split out of `CLAUDE.md` on 2026-09-27 (`/compress-docs`). `CLAUDE.md`
 keeps the rules; this file keeps why they exist — the dated incidents and decisions behind
-them. Newest first. Git history has the full detail.
+them. Newest first. Git history has the full detail. Entries before 2026-09-28 cover both
+apps, from when SmoothAnnotate (now SmoothDraw, its own repo) lived here too.
+
+## 2026-09-28/29 — the drawing app moved out: SmoothAnnotate → SmoothDraw
+
+Omri wanted the drawing app ("Smooth Draw", as he calls it) in a folder of its own, fully
+apart from the ring — the same "separation between the tools" as the day before. It became
+**SmoothDraw**: repo `omri-il/SmoothDraw` (`C:\Users\omrii\Projects\SmoothDraw`), made from a
+fresh clone of this repo with `git filter-repo`, so its 31 commits of history came along.
+It has its own install (`E:\apps\SmoothDraw`, logon task "SmoothDraw", Start-menu
+`SmoothDraw.lnk`) and took over SmoothAnnotate's settings and dot place on first start.
+The same session rebuilt its toolbar, added undo/redo and pen thickness (SmoothDraw's
+CHANGELOG).
+
+What changed here:
+- `src/SmoothAnnotate`, its icon, its half of `make_icons.py`, its solution entry and
+  `tools/touch-test.ps1` (which only tested it) are gone. `src/Shared/ControlPipe.cs` stays;
+  the same file is in SmoothDraw.
+- `start.vbs` starts SmoothZoom only, and only if the exe is there.
+- `install.ps1` no longer starts, stops or copies SmoothAnnotate. It deletes what it left
+  behind (the install's `SmoothAnnotate\` folder, guarded to a folder of that name with its
+  exe inside, `-LiteralPath`; the Start-menu entry "Draw - SmoothAnnotate"). Run from the
+  install folder itself it copies nothing and leaves SmoothZoom running, which is how the
+  cleanup went in without rebuilding `SmoothZoom.exe` — a new build would have needed a new
+  Smart App Control verdict on the laptop.
+- `publish.ps1` takes `-Dotnet` / `-NuGetConfig`, so the home PC's portable SDK builds with
+  one command; the clean config now lives at `E:\tools\nuget-clean.config`.
+
+Found on the way (CLAUDE.md corrected): SmoothZoom is **System-DPI-aware**, not PerMonitorV2
+as the docs said — `ApplicationHighDpiMode` only feeds WinForms' startup code. And started
+through the logon task, it runs at **BelowNormal** priority (Task Scheduler's default).
+
+The text of `CLAUDE.md` before the split: `git show e1be3aa:CLAUDE.md` (SmoothDraw's copy of
+the history has it too, as `49c653b`).
 
 ## 2026-09-28 — separated from the OBS dashboard; nothing turns on by itself any more
 
