@@ -77,7 +77,17 @@ Stored at `%APPDATA%\SmoothZoom\settings.json`. Defaults:
 - **Ring size on the laptop** (HP OmniBook Ultra Flip 14): its `settings.json` has
   `HighlightRingSize: 60`. At 200% scaling a ring is 2× its size in pixels, and OBS shrinks
   that screen to 0.6× (1800 → 1080), so 60 comes out at ~72 px in the video, matching the
-  home PC's 70. This is a per-machine value, never a code default.
+  home PC's 70. This is a per-machine value, never a code default. It really took effect
+  only on 2026-09-29 18:48 (read back from the real file then): before, the 60 lived only
+  in Claude's hidden copy (next bullet) and the laptop ran on defaults, ring 70 and auto-on.
+- 🚨 **On the laptop, don't write or read the app's AppData files straight from a Claude
+  desktop session.** Programs the session starts run inside Claude's MSIX package, and a
+  file they CREATE under `%APPDATA%` / `%LOCALAPPDATA%` lands in
+  `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\…` instead; the session then
+  reads that copy in place of the real file. The installed app (started by Task Scheduler,
+  outside the package) never sees it. Seen 2026-09-29: `LocalCache\Roaming\SmoothZoom\settings.json`
+  (v2, ring 60, written 2026-09-27) while the real `%APPDATA%\SmoothZoom` had no file at all.
+  Do both through a one-off scheduled task (Install / update → "From a Claude desktop session").
 
 ### Cursor ring, click ripple, auto-on while recording
 - The ring is an ordinary topmost click-through window, so OBS **Display Capture records it**
@@ -216,6 +226,19 @@ laptop build to the home PC.
    by `deploy/make_icons.py` (Pillow, run once, committed; re-running it gives the same
    bytes): a yellow ring on a dark tile. The tray icon is the same icon, read back from the exe.
 2. **Laptop:** `& publish\SmoothTools\install.ps1 -Target "$env:LOCALAPPDATA\Programs\SmoothTools"`
+   - **From a Claude desktop session**, run it through a one-off scheduled task, so what it
+     creates under AppData is real — its settings seed is the kind of file that went astray
+     before (Settings → the 🚨 bullet; the Start menu was not redirected, SmoothDraw CLAUDE.md).
+     How it was done 2026-09-29: a wrapper `.ps1` in `publish\` (gitignored) that runs
+     `install.ps1` inside `Start-Transcript` and writes a `.done` file at the end; register
+     it as an Interactive, `RunLevel Limited` task for `$env:COMPUTERNAME\$env:USERNAME`,
+     start it, wait for the `.done` file, read the transcript, unregister the task. A
+     one-off read or settings edit goes the same way. ⚠️ Output piped to `Set-Content` is
+     held open until the script ends: wait for the end before reading it.
+   - **Installed on the laptop 2026-09-29 18:45** (build of 1a35425, after SmoothDraw's
+     install): `running: SmoothZoom`, SmoothAnnotate's folder and "Draw - SmoothAnnotate"
+     removed, the pipe's `status` said ring off. The real `settings.json` was seeded as v3
+     then (none existed), and got the laptop's `HighlightRingSize: 60` at 18:48.
 3. **Home PC:** `scp -r publish/SmoothTools omrii@100.111.186.101:E:/apps/SmoothTools-incoming-<unique>`, then
    over SSH `powershell -ExecutionPolicy Bypass -File E:\apps\SmoothTools-incoming-<unique>\install.ps1 -Target E:\apps\SmoothTools`,
    then delete that folder.
@@ -273,13 +296,13 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   It runs the exe with `--toggle`, so a tap switches the ring on and off. It can be pinned
   to the taskbar or picked for the pen's top button. The name is English because
   WScript.Shell reads Hebrew-named `.lnk` files as empty.
-- 🚨 **The laptop has Smart App Control ON** (last read 2026-09-27 15:49: `Get-MpComputerStatus` →
+- 🚨 **The laptop has Smart App Control ON** (last read 2026-09-29 ~18:40: `Get-MpComputerStatus` →
   `SmartAppControlState: On`; the home PC is Off. Omri was given the steps to turn it off
   himself, since it's a security setting; re-read it before relying on this line). SAC blocks
   unsigned programs it has no good cloud verdict for. **Every new build is judged again, and
   the verdict varies** — a build can be blocked and the next one let through (CHANGELOG). So
-  after any update, check that the app is running on the laptop. Last seen: the ✕-fix
-  build (5d3f3f4) was let through for both apps, which ran within 18 s (2026-09-27 ~21:50). A block is CodeIntegrity
+  after any update, check that the app is running on the laptop. Last seen: the build of
+  1a35425 was let through, running within 10 s and no 3077 (2026-09-29 18:45). A block is CodeIntegrity
   event 3077, "did not meet the Enterprise signing level requirements". Launched by `start.vbs`, the block shows up as a
   "Windows Script Host" error box. The check: `Get-WinEvent -LogName
   'Microsoft-Windows-CodeIntegrity/Operational'`, event 3077 naming the exe. Never try to

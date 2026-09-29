@@ -5,6 +5,32 @@ keeps the rules; this file keeps why they exist — the dated incidents and deci
 them. Newest first. Git history has the full detail. Entries before 2026-09-28 cover both
 apps, from when SmoothAnnotate (now SmoothDraw, its own repo) lived here too.
 
+## 2026-09-29 (evening) — the ring came on in a laptop recording; the laptop's "60" was never real
+
+Omri, after a 30-minute OBS recording on the laptop: the ring turned on "without me
+touching anything". `obs.log` there: `connected to OBS` 18:02:26, `recording started`
+18:03:06, `recording stopped` 18:33:02. The laptop still ran the 2026-09-27 build, whose
+watcher switches the ring on when OBS records; the 2026-09-28 "no auto-on" build had been
+installed on the home PC only (its `obs.log` has nothing after 2026-09-28 09:40, as it
+should). Updated the laptop the same evening: SmoothDraw first (its CHANGELOG), then this
+repo's build of 1a35425, which removed SmoothAnnotate's leftovers. Smart App Control let
+both through.
+
+Found on the way: CLAUDE.md said since 2026-09-27 that the laptop's `settings.json` has
+`HighlightRingSize: 60`. That file existed only in the Claude desktop app's MSIX cache,
+`LocalCache\Roaming\SmoothZoom\settings.json` (v2, written 2026-09-27 14:59). The real
+`%APPDATA%\SmoothZoom` had no file, so the installed app ran on code defaults: ring 70,
+auto-on. Every session reading the file from inside Claude saw the hidden copy, which is how
+it went unnoticed; it showed only when the new build failed to rewrite the "v2" file as v3.
+The install, run through a one-off scheduled task (outside the package), seeded a real v3
+file. 60 was written into it the same way at 18:48, SmoothZoom restarted, and the hidden
+copy went to the Recycle Bin. CLAUDE.md got the 🚨 rule under Settings and the one-off-task
+route under Install / update.
+
+The Smart App Control lines as they were: "(last read 2026-09-27 15:49: …)" and "Last seen:
+the ✕-fix build (5d3f3f4) was let through for both apps, which ran within 18 s (2026-09-27
+~21:50)."
+
 ## 2026-09-28/29 — the drawing app moved out: SmoothAnnotate → SmoothDraw
 
 Omri wanted the drawing app ("Smooth Draw", as he calls it) in a folder of its own, fully
