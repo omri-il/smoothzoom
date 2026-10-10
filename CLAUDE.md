@@ -302,7 +302,14 @@ What `deploy\install.ps1` does (safe to re-run; that is how you update):
   unsigned programs it has no good cloud verdict for. **Every new build is judged again, and
   the verdict varies** — a build can be blocked and the next one let through (CHANGELOG). So
   after any update, check that the app is running on the laptop. Last seen: the build of
-  1a35425 was let through, running within 10 s and no 3077 (2026-09-29 18:45). A block is CodeIntegrity
+  1a35425 was let through, running within 10 s and no 3077 (2026-09-29 18:45).
+  🚨 **The verdict can also turn on a build already installed:** on 2026-10-10 11:28 that same
+  `SmoothZoom.exe` (running since 10-08, started by the logon task) was BLOCKED when the Start-menu
+  entry launched it again (3077 + a Smart App Control event 3118; the running copy kept running).
+  So after a laptop restart SmoothZoom may not start at all — `Get-Process SmoothZoom` first when
+  "the ring doesn't come on". The same day SmoothDraw.exe was still let through. That is why the
+  Ajazz pad's ring key types Ctrl+Alt+H into the running app instead of using this entry
+  (davinci-automation CLAUDE.md surface 6 → ◎). A block is CodeIntegrity
   event 3077, "did not meet the Enterprise signing level requirements". Launched by `start.vbs`, the block shows up as a
   "Windows Script Host" error box. The check: `Get-WinEvent -LogName
   'Microsoft-Windows-CodeIntegrity/Operational'`, event 3077 naming the exe. Never try to
